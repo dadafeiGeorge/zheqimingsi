@@ -4,6 +4,8 @@ import {
   BookMarked,
   Bookmark,
   BookmarkCheck,
+  BookmarkPlus,
+  Bot,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -11,7 +13,10 @@ import {
   Copy,
   ExternalLink,
   Headphones,
+  Highlighter,
+  Languages,
   ListTree,
+  Loader2,
   Maximize,
   MessageSquarePlus,
   Minimize,
@@ -19,12 +24,17 @@ import {
   PlusCircle,
   RotateCcw,
   Search,
+  Settings2,
   Sparkles,
   Trash2,
   Type,
+  Underline,
+  Wand2,
   X,
 } from 'lucide-react'
 import type {
+  AiConversation,
+  AiSettings,
   BookFullTextHit,
   BookMeta,
   BookmarkItem,
@@ -33,13 +43,31 @@ import type {
   GlossaryEntry,
   HighlightColor,
   HighlightItem,
+  HighlightStyle,
   RadioQueueItem,
   RadioState,
   ReaderSettings,
+  TranslationEngineId,
+  TranslationSettings,
 } from '../types'
 import { fetchBookMeta, fetchChapter, lookupPhilosophyTerm, searchInsideBook } from '../services/libraryApi'
 import { APP_THEMES, getPlatform, notifyToast, registerBackHandler, triggerHaptic } from '../services/platform'
-import { DEFAULT_READER_SETTINGS, recordStudySeconds, saveBookProgress } from '../services/storage'
+import {
+  DEFAULT_READER_SETTINGS,
+  loadHighlightStylePref,
+  recordStudySeconds,
+  saveBookProgress,
+  saveHighlightStylePref,
+} from '../services/storage'
+import {
+  TRANSLATION_ENGINES,
+  TRANSLATION_LANGUAGES,
+  getEngineMeta,
+  getLanguageMeta,
+  translateText,
+  type TranslationResult,
+} from '../services/translateService'
+import { askAiOnce } from '../services/aiService'
 import {
   applyInlineHighlightsToHtml,
   enhanceBlockFootnotesHtml,
@@ -48,6 +76,7 @@ import {
   type BlockSelectionSpan,
 } from '../utils/inlineHighlights'
 import { QuoteCardModal } from './QuoteCardModal'
+import { AiAssistantPanel, type AiReadingContext } from './AiAssistantPanel'
 
 interface ReaderViewProps {
   bookId: string
@@ -70,6 +99,13 @@ interface ReaderViewProps {
   onOpenRadioStudio?: () => void
   onJumpToBook?: (bookId: string, chapterIndex: number, blockIndex?: number) => void
   onBackToLibrary: () => void
+  translationSettings: TranslationSettings
+  onUpdateTranslationSettings: (partial: Partial<TranslationSettings>) => void
+  onOpenTranslationSettings: () => void
+  aiSettings: AiSettings
+  aiConversations: AiConversation[]
+  onSaveAiConversations: (next: AiConversation[]) => void
+  onOpenAiSettings: () => void
 }
 
 interface PendingSelection {
@@ -86,11 +122,14 @@ interface PendingSelection {
 const THEME_OPTIONS = APP_THEMES
 
 const HIGHLIGHT_COLORS: Array<{ id: HighlightColor; label: string; dot: string }> = [
+  { id: 'sky', label: '天蓝', dot: '#38bdf8' },
+  { id: 'rose', label: '茱萸', dot: '#f43f5e' },
+  { id: 'emerald', label: '翠竹', dot: '#22c55e' },
+  { id: 'indigo', label: '紫罗兰', dot: '#a855f7' },
   { id: 'amber', label: '琥珀', dot: '#eab308' },
-  { id: 'rose', label: '茱萸', dot: '#e11d48' },
-  { id: 'emerald', label: '翠竹', dot: '#10b981' },
-  { id: 'indigo', label: '靛青', dot: '#4f46e5' },
 ]
+
+const NOTE_QUICK_TAGS = ['#核心概念', '#论证逻辑', '#存疑待考', '#名言摘录']
 
 const COLUMN_PRESETS: Array<{ id: ReaderSettings['columnWidth']; label: string }> = [
   { id: 'narrow', label: '精读窄栏' },
@@ -120,6 +159,13 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   onOpenRadioStudio,
   onJumpToBook,
   onBackToLibrary,
+  translationSettings,
+  onUpdateTranslationSettings,
+  onOpenTranslationSettings,
+  aiSettings,
+  aiConversations,
+  onSaveAiConversations,
+  onOpenAiSettings,
 }) => {
   const [meta, setMeta] = useState<BookMeta | null>(null)
   const [chapter, setChapter] = useState<ChapterContent | null>(null)
@@ -129,8 +175,36 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   const [retryNonce, setRetryNonce] = useState(0)
   const loadSeqRef = useRef(0)
   const [showToc, setShowToc] = useState(false)
+  const [tocTab, setTocTab] = useState<'chapters' | 'notes'>('chapters')
   const [tocFilter, setTocFilter] = useState('')
   const [showSettings, setShowSettings] = useState(false)
+  const [highlightStyle, setHighlightStyle] = useState<HighlightStyle>(() => loadHighlightStylePref())
+
+  // 划词翻译浮窗 & 全文双语平行翻译状态
+  const [translationPopup, setTranslationPopup] = useState<{
+    text: string
+    spans?: BlockSelectionSpan[]
+    blockIndex?: number
+    startOffset?: number
+    endOffset?: number
+    loading: boolean
+    result: TranslationResult | null
+    error: string | null
+    engine: TranslationEngineId
+  } | null>(null)
+  const [bilingualMap, setBilingualMap] = useState<Record<number, { text?: string; loading?: boolean; error?: string }>>({})
+  const [showTranslateMenu, setShowTranslateMenu] = useState(false)
+
+  // AI 伴读抽屉状态
+  const [aiDrawerOpen, setAiDrawerOpen] = useState(false)
+  const [aiQuoteContext, setAiQuoteContext] = useState<{
+    text: string
+    spans?: BlockSelectionSpan[]
+    blockIndex?: number
+    startOffset?: number
+    endOffset?: number
+  } | null>(null)
+  const [aiDraftingNote, setAiDraftingNote] = useState(false)
 
   // 书内全文检索（Ctrl+F）
   const [showInBookSearch, setShowInBookSearch] = useState(false)
@@ -165,6 +239,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     endOffset?: number
     text: string
     color: HighlightColor
+    style: HighlightStyle
     note: string
   } | null>(null)
   const [inspectHighlight, setInspectHighlight] = useState<{
@@ -243,6 +318,14 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
 
   useEffect(() => {
     return registerBackHandler(80, () => {
+      if (translationPopup) {
+        setTranslationPopup(null)
+        return true
+      }
+      if (showTranslateMenu) {
+        setShowTranslateMenu(false)
+        return true
+      }
       if (footnotePopup) {
         setFootnotePopup(null)
         return true
@@ -261,7 +344,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
       }
       return false
     })
-  }, [footnotePopup, inspectHighlight, selectionMenu])
+  }, [translationPopup, showTranslateMenu, footnotePopup, inspectHighlight, selectionMenu])
 
   useEffect(() => {
     if (!mobileChromeOpen) setShowMobileThemeStrip(false)
@@ -880,7 +963,8 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   const buildHighlightItemsFromSpans = (
     spans: BlockSelectionSpan[],
     color: HighlightColor,
-    noteText: string
+    noteText: string,
+    style: HighlightStyle = highlightStyle
   ): HighlightItem[] => {
     if (!meta || !chapter || spans.length === 0) return []
     const now = Date.now()
@@ -900,21 +984,62 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
       // 跨段落合并批注时将「注」圆点附着在末段高亮末尾，视觉最自然
       note: idx === spans.length - 1 ? noteText : '',
       color,
+      style,
       createdAt: now,
     }))
   }
 
+  const handleToggleHighlightStyle = (next: HighlightStyle) => {
+    setHighlightStyle(next)
+    saveHighlightStylePref(next)
+  }
+
+  // 查找与当前选区重叠的已有高亮（用于划词栏左下角删除键）
+  const overlappingHighlights = useMemo(() => {
+    if (!selectionMenu) return []
+    const hits: HighlightItem[] = []
+    for (const sp of selectionMenu.spans) {
+      const blockHls = chapterHighlightsByBlock.get(sp.blockIndex) || []
+      for (const h of blockHls) {
+        const hs = typeof h.startOffset === 'number' ? h.startOffset : 0
+        const he = typeof h.endOffset === 'number' ? h.endOffset : hs + h.text.length
+        if (Math.max(sp.startOffset, hs) < Math.min(sp.endOffset, he)) {
+          if (!hits.some((x) => x.id === h.id)) hits.push(h)
+        }
+      }
+    }
+    return hits
+  }, [selectionMenu, chapterHighlightsByBlock])
+
+  const handleDeleteOverlappingSelectionHighlights = () => {
+    if (overlappingHighlights.length === 0) {
+      notifyToast('当前选中区域暂无已有划线')
+      return
+    }
+    const deletedGroups = new Set<string>()
+    for (const h of overlappingHighlights) {
+      if (h.groupId) {
+        if (deletedGroups.has(h.groupId)) continue
+        deletedGroups.add(h.groupId)
+      }
+      onDeleteHighlight(h.id)
+    }
+    clearNativeSelection()
+    notifyToast('已清除所选区域的划线与批注')
+  }
+
   const handleQuickUnderline = (color: HighlightColor) => {
     if (!selectionMenu || !meta || !chapter) return
-    const items = buildHighlightItemsFromSpans(selectionMenu.spans, color, '')
+    const items = buildHighlightItemsFromSpans(selectionMenu.spans, color, '', highlightStyle)
     if (items.length > 0) {
       onAddHighlight(items.length === 1 ? items[0] : items)
     }
     clearNativeSelection()
-    notifyToast(items.length > 1 ? `已为跨 ${items.length} 段选中内容添加划线` : '已为所选内容添加划线')
+    const styleLabel = highlightStyle === 'underline' ? '下划线' : '高亮'
+    notifyToast(items.length > 1 ? `已为跨 ${items.length} 段选中内容添加${styleLabel}` : `已为所选内容添加${styleLabel}`)
   }
 
-  const handleOpenNewNoteComposer = (color: HighlightColor = 'amber') => {
+  const handleOpenNewNoteComposer = (color: HighlightColor = 'sky') => {
     if (!selectionMenu) return
     setNoteComposer({
       mode: 'new',
@@ -924,16 +1049,85 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
       endOffset: selectionMenu.endOffset,
       text: selectionMenu.text,
       color,
+      style: highlightStyle,
       note: '',
     })
     clearNativeSelection()
+  }
+
+  const runSelectionTranslation = useCallback(
+    async (
+      text: string,
+      engineOverride?: TranslationEngineId,
+      extra?: { spans?: BlockSelectionSpan[]; blockIndex?: number; startOffset?: number; endOffset?: number }
+    ) => {
+      const targetEngine = engineOverride || translationSettings.activeEngine
+      setTranslationPopup({
+        text,
+        spans: extra?.spans,
+        blockIndex: extra?.blockIndex,
+        startOffset: extra?.startOffset,
+        endOffset: extra?.endOffset,
+        loading: true,
+        result: null,
+        error: null,
+        engine: targetEngine,
+      })
+      try {
+        const res = await translateText(text, translationSettings, aiSettings, targetEngine)
+        setTranslationPopup((prev) =>
+          prev && prev.text === text && prev.engine === targetEngine
+            ? { ...prev, loading: false, result: res, error: null }
+            : prev
+        )
+      } catch (err: any) {
+        setTranslationPopup((prev) =>
+          prev && prev.text === text && prev.engine === targetEngine
+            ? { ...prev, loading: false, result: null, error: err?.message || '翻译失败，请切换引擎或检查网络' }
+            : prev
+        )
+      }
+    },
+    [translationSettings, aiSettings]
+  )
+
+  const handleAiGenerateNoteDraft = async () => {
+    if (!noteComposer) return
+    if (!aiSettings.apiKey.trim() && aiSettings.preset !== 'ollama') {
+      notifyToast('请先配置 AI API 接口后再使用 AI 辅助批注')
+      onOpenAiSettings()
+      return
+    }
+    setAiDraftingNote(true)
+    try {
+      const draft = await askAiOnce(
+        { ...aiSettings, temperature: 0.5 },
+        [
+          {
+            role: 'system',
+            content: '你是哲学学术阅读导师。请针对读者选中的书摘，撰写一段 80-160 字精炼深刻的中文学术批注（直接输出批注正文，不要寒暄）。',
+          },
+          {
+            role: 'user',
+            content: `典籍：《${meta?.title || ''}》· ${chapter?.title || ''}\n选中原文：「${noteComposer.text}」\n请生成一段精准凝练的批注。`,
+          },
+        ],
+        35000
+      )
+      setNoteComposer((prev) => (prev ? { ...prev, note: prev.note ? `${prev.note}\n${draft}` : draft } : null))
+      notifyToast('AI 已生成批注草稿，可自由编辑后保存')
+    } catch (err: any) {
+      notifyToast(err?.message || 'AI 辅助批注失败')
+    } finally {
+      setAiDraftingNote(false)
+    }
   }
 
   const handleSaveComposer = () => {
     if (!noteComposer || !meta || !chapter) return
     const trimmedNote = noteComposer.note.trim()
 
-    // 编辑已有跨段落组时，同步更新该组内所有段落的颜色与批注
+    // 编辑已有跨段落组时，同步更新该组内所有段落的颜色、样式与批注
     if (noteComposer.mode === 'edit' && noteComposer.existingGroupId) {
       const groupItems = highlights
         .filter((h) => h.groupId === noteComposer.existingGroupId)
@@ -942,12 +1136,13 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         const updated = groupItems.map((it, idx) => ({
           ...it,
           color: noteComposer.color,
+          style: noteComposer.style,
           note: idx === groupItems.length - 1 ? trimmedNote : '',
         }))
         onAddHighlight(updated)
       }
     } else if (noteComposer.mode === 'new' && noteComposer.spans && noteComposer.spans.length > 1) {
-      const items = buildHighlightItemsFromSpans(noteComposer.spans, noteComposer.color, trimmedNote)
+      const items = buildHighlightItemsFromSpans(noteComposer.spans, noteComposer.color, trimmedNote, noteComposer.style)
       onAddHighlight(items)
     } else {
       const existing = noteComposer.existingId ? highlightById.get(noteComposer.existingId) : undefined
@@ -964,6 +1159,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         text: noteComposer.text,
         note: trimmedNote,
         color: noteComposer.color,
+        style: noteComposer.style,
         createdAt: existing ? existing.createdAt : Date.now(),
       })
     }
@@ -1065,6 +1261,95 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
 
   const visibleBlocks = isPaginated ? pages[pageIdx] || [] : displayBlocks
 
+  // 全文双语平行翻译引擎（当开启 fullTextEnabled 时，按当前页/章节渐进式并行翻译，自动缓存并随切章取消）
+  useEffect(() => {
+    if (!translationSettings.fullTextEnabled || !chapter) {
+      setBilingualMap({})
+      return
+    }
+    let cancelled = false
+    setBilingualMap({})
+
+    const targets = visibleBlocks.filter(
+      (b) => b.type !== 'hr' && b.type !== 'table' && (b.speakText || b.text).trim().length > 0
+    )
+    if (targets.length === 0) return
+
+    const run = async () => {
+      // 最多同时翻译前 36 段（或整页分页块），小并发防限流
+      const queue = targets.slice(0, isPaginated ? targets.length : 45)
+      const concurrency = translationSettings.activeEngine === 'offline' ? 4 : 2
+      let cursor = 0
+
+      const worker = async () => {
+        while (!cancelled && cursor < queue.length) {
+          const blk = queue[cursor++]
+          const raw = (blk.speakText || blk.text).trim()
+          if (!raw) continue
+          setBilingualMap((prev) => ({ ...prev, [blk.index]: { loading: true } }))
+          try {
+            const res = await translateText(raw, translationSettings, aiSettings)
+            if (cancelled) return
+            setBilingualMap((prev) => ({ ...prev, [blk.index]: { text: res.translatedText } }))
+          } catch (err: any) {
+            if (cancelled) return
+            setBilingualMap((prev) => ({
+              ...prev,
+              [blk.index]: { error: err?.message || '翻译失败' },
+            }))
+            // 若因缺少 API Key 或网络报错，避免连续刷屏，停止后续并发
+            if (String(err?.message || '').includes('请先在')) {
+              cancelled = true
+              return
+            }
+          }
+        }
+      }
+
+      await Promise.all(Array.from({ length: concurrency }, () => worker()))
+    }
+
+    run()
+    return () => {
+      cancelled = true
+    }
+  }, [
+    translationSettings.fullTextEnabled,
+    translationSettings.activeEngine,
+    translationSettings.sourceLang,
+    translationSettings.targetLang,
+    translationSettings.azureKey,
+    translationSettings.googleApiKey,
+    translationSettings.deeplApiKey,
+    chapter,
+    pageIdx,
+    isPaginated,
+  ])
+
+  // 本书所有划线与批注（供目录抽屉「本书批注」页签快速查阅与跳转）
+  const currentBookHighlights = useMemo(() => {
+    const seen = new Set<string>()
+    const out: HighlightItem[] = []
+    for (const h of highlights) {
+      if (h.bookId !== bookId) continue
+      if (h.groupId) {
+        if (seen.has(h.groupId)) continue
+        seen.add(h.groupId)
+        const parts = highlights
+          .filter((x) => x.groupId === h.groupId)
+          .sort((a, b) => a.blockIndex - b.blockIndex)
+        out.push({
+          ...parts[0],
+          text: parts.map((p) => p.text).join('\n'),
+          note: parts.find((p) => p.note)?.note || '',
+        })
+      } else {
+        out.push(h)
+      }
+    }
+    return out.sort((a, b) => a.chapterIndex - b.chapterIndex || a.blockIndex - b.blockIndex)
+  }, [highlights, bookId])
+
   const filteredChapters = useMemo(() => {
     if (!meta) return []
     const q = tocFilter.trim().toLowerCase()
@@ -1074,102 +1359,195 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
 
   const renderTocBody = () => (
     <>
-      <div className="p-4 border-b flex items-center justify-between gap-2 shrink-0" style={{ borderColor: 'var(--border)' }}>
-        <div className="min-w-0">
-          <h3 className="font-serif font-bold text-sm truncate">{meta?.title}</h3>
-          <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
-            当前第 {chapterIndex + 1} / {meta?.chapterCount || 1} 章 · {meta?.author}
-          </p>
-        </div>
-        <div className="flex items-center gap-1 shrink-0">
-          {(meta?.chapterCount || 0) > 12 && !tocFilter.trim() && (
-            <button
-              onClick={() => activeTocItemRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })}
-              className="px-2 py-1 rounded-lg text-[11px] font-medium border"
-              style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--accent)' }}
-            >
-              定位
+      <div className="p-4 pb-2.5 border-b space-y-2.5 shrink-0" style={{ borderColor: 'var(--border)' }}>
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <h3 className="font-serif font-bold text-sm truncate">{meta?.title}</h3>
+            <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
+              当前第 {chapterIndex + 1} / {meta?.chapterCount || 1} 章 · {meta?.author}
+            </p>
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            {tocTab === 'chapters' && (meta?.chapterCount || 0) > 12 && !tocFilter.trim() && (
+              <button
+                onClick={() => activeTocItemRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })}
+                className="px-2 py-1 rounded-lg text-[11px] font-medium border"
+                style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--accent)' }}
+              >
+                定位
+              </button>
+            )}
+            <button onClick={() => setShowToc(false)} className="p-1.5 rounded-lg hover:opacity-70" title="收起目录">
+              <X className="w-4 h-4" />
             </button>
-          )}
-          <button onClick={() => setShowToc(false)} className="p-1.5 rounded-lg hover:opacity-70" title="收起目录">
-            <X className="w-4 h-4" />
+          </div>
+        </div>
+
+        {/* 目录 / 本书批注 双页签切换 */}
+        <div className="grid grid-cols-2 gap-1 p-1 rounded-xl border" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)' }}>
+          <button
+            onClick={() => setTocTab('chapters')}
+            className="py-1.5 rounded-lg text-[11px] font-semibold transition-colors"
+            style={
+              tocTab === 'chapters'
+                ? { backgroundColor: 'var(--bg-card)', color: 'var(--accent)', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }
+                : { color: 'var(--text-secondary)' }
+            }
+          >
+            章节目录 ({meta?.chapterCount || 0})
+          </button>
+          <button
+            onClick={() => setTocTab('notes')}
+            className="py-1.5 rounded-lg text-[11px] font-semibold transition-colors"
+            style={
+              tocTab === 'notes'
+                ? { backgroundColor: 'var(--bg-card)', color: 'var(--accent)', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }
+                : { color: 'var(--text-secondary)' }
+            }
+          >
+            本书批注 ({currentBookHighlights.length})
           </button>
         </div>
       </div>
 
-      <div className="p-3 border-b shrink-0" style={{ borderColor: 'var(--border)' }}>
-        <div
-          className="flex items-center gap-2 px-3 py-2 rounded-xl border text-xs"
-          style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)' }}
-        >
-          <Search className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--text-muted)' }} />
-          <input
-            type="text"
-            value={tocFilter}
-            onChange={(e) => setTocFilter(e.target.value)}
-            placeholder="筛选章节标题…"
-            className="bg-transparent outline-none flex-1"
-            style={{ color: 'var(--text)' }}
-          />
-          {tocFilter && (
-            <button onClick={() => setTocFilter('')} className="p-0.5 opacity-65">
-              <X className="w-3.5 h-3.5" />
-            </button>
+      {tocTab === 'chapters' ? (
+        <>
+          <div className="p-3 border-b shrink-0" style={{ borderColor: 'var(--border)' }}>
+            <div
+              className="flex items-center gap-2 px-3 py-2 rounded-xl border text-xs"
+              style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)' }}
+            >
+              <Search className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--text-muted)' }} />
+              <input
+                type="text"
+                value={tocFilter}
+                onChange={(e) => setTocFilter(e.target.value)}
+                placeholder="筛选章节标题…"
+                className="bg-transparent outline-none flex-1"
+                style={{ color: 'var(--text)' }}
+              />
+              {tocFilter && (
+                <button onClick={() => setTocFilter('')} className="p-0.5 opacity-65">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto overscroll-contain p-2 space-y-0.5">
+            {filteredChapters.map((ch) => {
+              const active = ch.index === chapterIndex
+              return (
+                <div
+                  key={ch.index}
+                  ref={active ? activeTocItemRef : undefined}
+                  className="group flex items-center gap-1 rounded-xl transition-colors"
+                  style={active ? { backgroundColor: 'var(--accent-soft)' } : undefined}
+                >
+                  <button
+                    onClick={() => {
+                      triggerHaptic()
+                      setChapterIndex(ch.index)
+                      if (window.innerWidth < 1180 || isMobileTapMode) {
+                        setShowToc(false)
+                        setMobileChromeOpen(false)
+                      }
+                    }}
+                    className="flex-1 text-left px-3 py-3 md:py-2.5 text-[13px] md:text-xs leading-snug truncate"
+                    style={{
+                      paddingLeft: `${10 + Math.min(ch.level - 1, 2) * 12}px`,
+                      color: active ? 'var(--accent)' : 'var(--text)',
+                      fontWeight: active ? 700 : 400,
+                    }}
+                  >
+                    {ch.title}
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (!meta) return
+                      onAddToRadioQueue({
+                        id: `q_${meta.id}_${ch.index}_${Date.now()}`,
+                        bookId: meta.id,
+                        bookTitle: meta.title,
+                        author: meta.author,
+                        chapterIndex: ch.index,
+                        chapterTitle: ch.title,
+                      })
+                      notifyToast(`已加入电台节目单：${ch.title}`)
+                    }}
+                    title="加入电台节目单"
+                    className="p-2.5 md:p-2 opacity-60 hover:opacity-100 shrink-0"
+                    style={{ color: 'var(--accent)' }}
+                  >
+                    <PlusCircle className="w-4 h-4 md:w-3.5 md:h-3.5" />
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        </>
+      ) : (
+        <div className="flex-1 overflow-y-auto overscroll-contain p-2.5 space-y-2">
+          {currentBookHighlights.length === 0 ? (
+            <div className="py-12 px-4 text-center text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+              本书尚无划线与批注。在正文手动划词，可自由选择 5 色高亮/下划线并撰写思想批注。
+            </div>
+          ) : (
+            currentBookHighlights.map((hl) => {
+              const dotColor = HIGHLIGHT_COLORS.find((c) => c.id === hl.color)?.dot || 'var(--accent)'
+              return (
+                <button
+                  key={hl.id}
+                  onClick={() => {
+                    triggerHaptic()
+                    if (hl.chapterIndex === chapterIndex) {
+                      if (isPaginated) {
+                        const targetPage = pages.findIndex((pg) => pg.some((b) => b.index === hl.blockIndex))
+                        if (targetPage >= 0) setPageIdx(targetPage)
+                      }
+                      window.setTimeout(() => {
+                        blockRefs.current.get(hl.blockIndex)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                        setFlashBlockIndex(hl.blockIndex)
+                        window.setTimeout(() => setFlashBlockIndex((cur) => (cur === hl.blockIndex ? null : cur)), 2400)
+                      }, 40)
+                    } else {
+                      pendingJumpBlockRef.current = hl.blockIndex
+                      setChapterIndex(hl.chapterIndex)
+                    }
+                    if (window.innerWidth < 1180 || isMobileTapMode) {
+                      setShowToc(false)
+                      setMobileChromeOpen(false)
+                    }
+                  }}
+                  className="w-full text-left p-3 rounded-xl border space-y-1.5 hover:opacity-90 active:scale-[0.99] transition-all"
+                  style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)' }}
+                >
+                  <div className="flex items-center justify-between gap-2 text-[10px]">
+                    <span className="truncate font-semibold" style={{ color: 'var(--accent)' }}>
+                      第 {hl.chapterIndex + 1} 章 · {hl.chapterTitle}
+                    </span>
+                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: dotColor }} />
+                  </div>
+                  <p
+                    className="font-serif text-xs line-clamp-2 leading-relaxed pl-2 border-l-2"
+                    style={{ borderColor: dotColor, color: 'var(--text)' }}
+                  >
+                    {hl.text}
+                  </p>
+                  {hl.note && (
+                    <p
+                      className="text-[11px] line-clamp-2 leading-relaxed px-2 py-1 rounded-lg"
+                      style={{ backgroundColor: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}
+                    >
+                      批注：{hl.note}
+                    </p>
+                  )}
+                </button>
+              )
+            })
           )}
         </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto overscroll-contain p-2 space-y-0.5">
-        {filteredChapters.map((ch) => {
-          const active = ch.index === chapterIndex
-          return (
-            <div
-              key={ch.index}
-              ref={active ? activeTocItemRef : undefined}
-              className="group flex items-center gap-1 rounded-xl transition-colors"
-              style={active ? { backgroundColor: 'var(--accent-soft)' } : undefined}
-            >
-              <button
-                onClick={() => {
-                  triggerHaptic()
-                  setChapterIndex(ch.index)
-                  if (window.innerWidth < 1180 || isMobileTapMode) {
-                    setShowToc(false)
-                    setMobileChromeOpen(false)
-                  }
-                }}
-                className="flex-1 text-left px-3 py-3 md:py-2.5 text-[13px] md:text-xs leading-snug truncate"
-                style={{
-                  paddingLeft: `${10 + Math.min(ch.level - 1, 2) * 12}px`,
-                  color: active ? 'var(--accent)' : 'var(--text)',
-                  fontWeight: active ? 700 : 400,
-                }}
-              >
-                {ch.title}
-              </button>
-              <button
-                onClick={() => {
-                  if (!meta) return
-                  onAddToRadioQueue({
-                    id: `q_${meta.id}_${ch.index}_${Date.now()}`,
-                    bookId: meta.id,
-                    bookTitle: meta.title,
-                    author: meta.author,
-                    chapterIndex: ch.index,
-                    chapterTitle: ch.title,
-                  })
-                  notifyToast(`已加入电台节目单：${ch.title}`)
-                }}
-                title="加入电台节目单"
-                className="p-2.5 md:p-2 opacity-60 hover:opacity-100 shrink-0"
-                style={{ color: 'var(--accent)' }}
-              >
-                <PlusCircle className="w-4 h-4 md:w-3.5 md:h-3.5" />
-              </button>
-            </div>
-          )
-        })}
-      </div>
+      )}
     </>
   )
 
@@ -1186,20 +1564,20 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         />
       )}
 
-      {/* 阅读顶部沉浸工具条（上框）：桌面常规常驻；全屏或手机版 APK 轻点屏幕平滑弹出/收回 */}
+      {/* 阅读顶部沉浸工具条（上框）：桌面常规常驻（z-20 避让顶栏主题下拉菜单）；全屏或手机版 APK 轻点屏幕平滑弹出/收回 */}
       <div
         onMouseLeave={() => isFullscreen && !isMobileTapMode && setFsHeaderVisible(false)}
         onClick={(e) => e.stopPropagation()}
-        className={`shrink-0 min-h-[52px] px-3 md:px-6 border-b flex items-center justify-between gap-2 z-30 transition-all duration-300 safe-top ${
+        className={`shrink-0 min-h-[52px] px-3 md:px-6 border-b flex items-center justify-between gap-2 transition-all duration-300 safe-top ${
           isMobileTapMode
             ? mobileChromeOpen && !showToc && !showInBookSearch && !showSettings
-              ? 'fixed top-0 inset-x-0 translate-y-0 opacity-100 shadow-lg'
-              : 'fixed top-0 inset-x-0 -translate-y-full opacity-0 pointer-events-none'
+              ? 'fixed top-0 inset-x-0 z-30 translate-y-0 opacity-100 shadow-lg'
+              : 'fixed top-0 inset-x-0 z-30 -translate-y-full opacity-0 pointer-events-none'
             : isFullscreen
             ? fsHeaderVisible || showSettings || showToc || showInBookSearch
-              ? 'fixed top-0 inset-x-0 translate-y-0 opacity-100 shadow-lg'
-              : 'fixed top-0 inset-x-0 -translate-y-full opacity-0 pointer-events-none'
-            : ''
+              ? 'fixed top-0 inset-x-0 z-30 translate-y-0 opacity-100 shadow-lg'
+              : 'fixed top-0 inset-x-0 z-30 -translate-y-full opacity-0 pointer-events-none'
+            : 'relative z-20'
         }`}
         style={{ backgroundColor: 'var(--bg-glass)', borderColor: 'var(--border)', backdropFilter: 'blur(18px)' }}
       >
@@ -1252,6 +1630,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
               setShowInBookSearch((v) => !v)
               setShowSettings(false)
               setShowToc(false)
+              setShowTranslateMenu(false)
               window.setTimeout(() => inBookSearchInputRef.current?.focus(), 60)
             }}
             className="w-9 h-9 md:w-8 md:h-8 rounded-xl flex items-center justify-center transition-colors hover:opacity-80 active:scale-95"
@@ -1262,15 +1641,135 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
             <Search className="w-[18px] h-[18px] md:w-4 md:h-4" />
           </button>
 
+          {/* 翻译功能按钮（桌面端带标签，移动端图标直达双语/翻译设置） */}
+          <div className="relative">
+            <button
+              onClick={() => {
+                triggerHaptic()
+                if (isMobileTapMode) {
+                  setMobileChromeOpen(false)
+                  onOpenTranslationSettings()
+                } else {
+                  setShowTranslateMenu((v) => !v)
+                  setShowSettings(false)
+                  setShowInBookSearch(false)
+                }
+              }}
+              className={
+                isMobileTapMode
+                  ? 'w-9 h-9 rounded-xl flex items-center justify-center relative transition-colors active:scale-95'
+                  : 'px-2.5 py-1.5 rounded-full text-[11px] font-medium flex items-center gap-1 transition-all border'
+              }
+              style={
+                isMobileTapMode
+                  ? { color: translationSettings.fullTextEnabled ? 'var(--accent)' : 'var(--text-secondary)' }
+                  : translationSettings.fullTextEnabled || showTranslateMenu
+                  ? { backgroundColor: 'var(--accent-soft)', color: 'var(--accent)', borderColor: 'var(--accent)' }
+                  : { backgroundColor: 'var(--bg-card)', color: 'var(--text-secondary)', borderColor: 'var(--border)' }
+              }
+              title="全文双语平行翻译与引擎配置"
+              aria-label="翻译"
+            >
+              <Languages className="w-[18px] h-[18px] md:w-3.5 md:h-3.5" />
+              {!isMobileTapMode && <span className="hidden sm:inline">{translationSettings.fullTextEnabled ? '双语中' : '翻译'}</span>}
+              {isMobileTapMode && translationSettings.fullTextEnabled && (
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full" style={{ backgroundColor: 'var(--accent)' }} />
+              )}
+            </button>
+
+            {!isMobileTapMode && showTranslateMenu && (
+              <div
+                onClick={(e) => e.stopPropagation()}
+                className="absolute right-0 mt-2 w-64 rounded-2xl border p-3 shadow-2xl z-50 space-y-2.5 font-sans animate-float-in"
+                style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-strong)', boxShadow: 'var(--shadow-float)' }}
+              >
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold">全文双语平行翻译</span>
+                  <button
+                    onClick={() => {
+                      const next = !translationSettings.fullTextEnabled
+                      onUpdateTranslationSettings({ fullTextEnabled: next })
+                      notifyToast(next ? '已开启双语平行翻译' : '已关闭双语平行翻译')
+                    }}
+                    className="w-10 h-5 rounded-full p-0.5 transition-colors"
+                    style={{ backgroundColor: translationSettings.fullTextEnabled ? 'var(--accent)' : 'var(--border-strong)' }}
+                  >
+                    <span
+                      className={`block w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                        translationSettings.fullTextEnabled ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+                <div className="text-[11px] flex items-center justify-between" style={{ color: 'var(--text-muted)' }}>
+                  <span>当前引擎：{getEngineMeta(translationSettings.activeEngine).shortName}</span>
+                  <span>目标：{getLanguageMeta(translationSettings.targetLang).nativeLabel}</span>
+                </div>
+                <div className="flex flex-wrap gap-1 pt-1">
+                  {TRANSLATION_ENGINES.map((eng) => (
+                    <button
+                      key={eng.id}
+                      onClick={() => {
+                        onUpdateTranslationSettings({ activeEngine: eng.id })
+                        notifyToast(`已切换翻译引擎：${eng.name}`)
+                      }}
+                      className="px-2 py-1 rounded-lg border text-[10px] font-medium"
+                      style={
+                        translationSettings.activeEngine === eng.id
+                          ? { backgroundColor: 'var(--accent)', color: '#fff', borderColor: 'var(--accent)' }
+                          : { backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }
+                      }
+                    >
+                      {eng.shortName}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={() => {
+                    setShowTranslateMenu(false)
+                    onOpenTranslationSettings()
+                  }}
+                  className="w-full py-1.5 rounded-xl border text-[11px] font-medium flex items-center justify-center gap-1 hover:opacity-85"
+                  style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border)', color: 'var(--accent)' }}
+                >
+                  <Settings2 className="w-3.5 h-3.5" />
+                  <span>打开全部翻译服务配置</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* AI 伴读助手按钮（桌面端工具栏直达） */}
+          {!isMobileTapMode && (
+            <button
+              onClick={() => {
+                setAiQuoteContext(null)
+                setAiDrawerOpen(true)
+                setShowSettings(false)
+                setShowTranslateMenu(false)
+              }}
+              className="px-2.5 py-1.5 rounded-full text-[11px] font-medium flex items-center gap-1 transition-all border"
+              style={
+                aiDrawerOpen
+                  ? { backgroundColor: 'var(--accent)', color: '#fff', borderColor: 'var(--accent)' }
+                  : { backgroundColor: 'var(--accent-soft)', color: 'var(--accent)', borderColor: 'transparent' }
+              }
+              title="打开 AI 哲思伴读助手"
+            >
+              <Bot className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">AI 助手</span>
+            </button>
+          )}
+
           {!isMobileTapMode && (
             <button
               onClick={() => onPlayRadioFrom(bookId, chapterIndex, 0)}
               className="px-2.5 py-1.5 rounded-full text-[11px] font-medium flex items-center gap-1 transition-all"
-              style={{ backgroundColor: 'var(--accent-soft)', color: 'var(--accent)' }}
+              style={{ backgroundColor: 'var(--bg-elevated)', color: 'var(--text)' }}
               title="从本章开启哲启明思电台朗读"
             >
-              <Headphones className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">电台朗读</span>
+              <Headphones className="w-3.5 h-3.5" style={{ color: 'var(--accent)' }} />
+              <span className="hidden lg:inline">电台朗读</span>
             </button>
           )}
 
@@ -1357,10 +1856,11 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
             if (target?.closest('button, a, input, select, [data-hl-id], [data-fn-key]')) return
             if (Date.now() - lastSwipeAtRef.current < 260) return
 
-            // 若当前打开了排版/搜索/批注/脚注/划词工具栏，首次点击仅收起弹窗，绝不误触发翻页或菜单切换
-            if (showSettings || showInBookSearch || inspectHighlight || footnotePopup || selectionMenu) {
+            // 若当前打开了排版/搜索/批注/脚注/翻译菜单/划词工具栏，首次点击仅收起弹窗，绝不误触发翻页或菜单切换
+            if (showSettings || showInBookSearch || showTranslateMenu || inspectHighlight || footnotePopup || selectionMenu) {
               setShowSettings(false)
               setShowInBookSearch(false)
+              setShowTranslateMenu(false)
               setInspectHighlight(null)
               setFootnotePopup(null)
               if (selectionMenu) clearNativeSelection()
@@ -1456,6 +1956,39 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                   </span>
                 )}
               </div>
+
+              {/* 全文双语平行翻译状态横幅 */}
+              {translationSettings.fullTextEnabled && (
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  className="mb-6 px-3.5 py-2.5 rounded-2xl border flex flex-wrap items-center justify-between gap-2 text-xs font-sans select-none"
+                  style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--accent)' }}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Languages className="w-4 h-4 shrink-0" style={{ color: 'var(--accent)' }} />
+                    <span className="font-medium truncate">
+                      双语平行翻译 · {getEngineMeta(translationSettings.activeEngine).name} →{' '}
+                      {getLanguageMeta(translationSettings.targetLang).nativeLabel}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      onClick={onOpenTranslationSettings}
+                      className="px-2.5 py-1 rounded-lg border text-[11px] font-medium"
+                      style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--accent)' }}
+                    >
+                      切换引擎
+                    </button>
+                    <button
+                      onClick={() => onUpdateTranslationSettings({ fullTextEnabled: false })}
+                      className="px-2.5 py-1 rounded-lg text-[11px] opacity-75 hover:opacity-100"
+                      style={{ color: 'var(--text-secondary)' }}
+                    >
+                      关闭双语
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* 纯净正文内容块：取消整段点击选中、取消左侧朗读键，原生支持任意手动划词划线与批注 */}
               <div
@@ -1561,6 +2094,24 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                           }`}
                           dangerouslySetInnerHTML={{ __html: renderedHtml }}
                         />
+                      )}
+
+                      {/* 双语平行译文块 */}
+                      {translationSettings.fullTextEnabled && blk.type !== 'table' && bilingualMap[blk.index] && (
+                        <div className="bilingual-para-box font-sans select-text">
+                          {bilingualMap[blk.index].loading ? (
+                            <span className="inline-flex items-center gap-1.5 text-[11px] opacity-65">
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                              <span>正在翻译…</span>
+                            </span>
+                          ) : bilingualMap[blk.index].error ? (
+                            <span className="text-[11px] text-red-500">
+                              译文获取失败：{bilingualMap[blk.index].error}
+                            </span>
+                          ) : (
+                            <span>{bilingualMap[blk.index].text}</span>
+                          )}
+                        </div>
                       )}
                     </div>
                   )
@@ -1848,8 +2399,8 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                 </div>
               )}
 
-              {/* 第二行：四大核心快捷功能键（清爽四等分，与顶栏返回零重复） */}
-              <div className="grid grid-cols-4 gap-1">
+              {/* 第二行：五大核心快捷功能键（目录 / 听书 / AI / 主题 / 排版） */}
+              <div className="grid grid-cols-5 gap-1">
                 <button
                   onClick={() => {
                     triggerHaptic()
@@ -1881,6 +2432,21 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                 >
                   <Headphones className="w-[18px] h-[18px]" />
                   <span>{isRadioOnThisChapter ? '播报中' : '听书'}</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    triggerHaptic()
+                    setMobileChromeOpen(false)
+                    setShowMobileThemeStrip(false)
+                    setAiQuoteContext(null)
+                    setAiDrawerOpen(true)
+                  }}
+                  className="py-2 flex flex-col items-center justify-center gap-1 rounded-xl text-[11px] font-medium active:scale-95"
+                  style={{ color: aiDrawerOpen ? 'var(--accent)' : 'var(--text-secondary)' }}
+                >
+                  <Bot className="w-[18px] h-[18px]" />
+                  <span>AI</span>
                 </button>
 
                 <button
@@ -1953,160 +2519,152 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         </div>
       </div>
 
-      {/* 手动划词工具栏：手机端智能底部停靠彻底避让 Android 原生选择手柄；桌面端紧贴选区上方 */}
+      {/* 手动划词工具栏（完整实现图一双排结构：上排 复制/搜索/翻译/朗读/批注/AI/金句卡；下排 删除/荧光高亮/下划线/5色圆点） */}
       {selectionMenu && (
-        isMobileTapMode ? (
-          <div
-            data-selection-toolbar="true"
-            onMouseDown={(e) => {
-              e.preventDefault()
-              e.stopPropagation()
-            }}
-            onTouchStart={(e) => e.stopPropagation()}
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              backgroundColor: 'var(--bg-card)',
-              borderColor: 'var(--border-strong)',
-              boxShadow: 'var(--shadow-float)',
-              userSelect: 'none',
-              WebkitUserSelect: 'none',
-            }}
-            className="fixed inset-x-3 bottom-4 z-50 rounded-2xl border p-3 space-y-2.5 font-sans select-none safe-bottom animate-sheet-up"
-          >
-            {/* 第一行：4色大圆点划线 + 写批注 + 关闭 */}
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2.5">
-                {HIGHLIGHT_COLORS.map((c) => (
-                  <button
-                    key={c.id}
-                    onClick={() => {
-                      triggerHaptic()
-                      handleQuickUnderline(c.id)
-                    }}
-                    title={`${c.label}划线`}
-                    className="w-7 h-7 rounded-full border-2 border-white/85 shadow-sm transition-transform active:scale-90"
-                    style={{ backgroundColor: c.dot }}
-                  />
-                ))}
-              </div>
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={() => {
-                    triggerHaptic()
-                    handleOpenNewNoteComposer('amber')
-                  }}
-                  className="px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 text-white transition-transform active:scale-95"
-                  style={{ backgroundColor: 'var(--accent)' }}
-                >
-                  <MessageSquarePlus className="w-3.5 h-3.5" />
-                  <span>写批注</span>
-                </button>
-                <button
-                  onClick={() => clearNativeSelection()}
-                  className="w-8 h-8 rounded-xl flex items-center justify-center border active:scale-90"
-                  style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border)', color: 'var(--text-muted)' }}
-                  aria-label="取消选中"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* 第二行：带清晰中文标签的功能胶囊 */}
-            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-              {selectionGlossary.length > 0 && (
-                <button
-                  onClick={() => {
-                    const q = selectionMenu.text
-                    const entries = selectionGlossary
-                    clearNativeSelection()
-                    setActiveGlossaryModal({ query: q, entries })
-                  }}
-                  className="px-3 py-1.5 rounded-xl text-xs font-medium flex items-center gap-1.5 shrink-0 active:scale-95"
-                  style={{ backgroundColor: 'var(--accent-soft)', color: 'var(--accent)' }}
-                >
-                  <BookMarked className="w-3.5 h-3.5" />
-                  <span>查术语</span>
-                </button>
-              )}
-
-              <button
-                onClick={() => {
-                  setQuoteText(selectionMenu.text)
-                  clearNativeSelection()
-                }}
-                className="px-3 py-1.5 rounded-xl text-xs font-medium flex items-center gap-1.5 shrink-0 active:scale-95"
-                style={{ backgroundColor: 'var(--bg-elevated)', color: 'var(--text)' }}
-              >
-                <Sparkles className="w-3.5 h-3.5" style={{ color: 'var(--gold)' }} />
-                <span>金句卡</span>
-              </button>
-
-              <button
-                onClick={() => handleCopyCitation(selectionMenu.text)}
-                className="px-3 py-1.5 rounded-xl text-xs font-medium flex items-center gap-1.5 shrink-0 active:scale-95"
-                style={{ backgroundColor: 'var(--bg-elevated)', color: 'var(--text)' }}
-              >
-                {copiedFlag ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>复制引用</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  const blkIdx = selectionMenu.blockIndex
-                  clearNativeSelection()
-                  onPlayRadioFrom(bookId, chapterIndex, blkIdx)
-                  notifyToast('已从此段开启微软电台朗读')
-                }}
-                className="px-3 py-1.5 rounded-xl text-xs font-medium flex items-center gap-1.5 shrink-0 active:scale-95"
-                style={{ backgroundColor: 'var(--bg-elevated)', color: 'var(--accent)' }}
-              >
-                <Headphones className="w-3.5 h-3.5" />
-                <span>从此朗读</span>
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div
-            data-selection-toolbar="true"
-            onMouseDown={(e) => {
-              e.preventDefault()
-              e.stopPropagation()
-            }}
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              position: 'fixed',
-              left: `${selectionMenu.x}px`,
-              top: `${selectionMenu.y}px`,
-              transform: selectionMenu.placeBelow ? 'translate(-50%, 0)' : 'translate(-50%, -100%)',
-              backgroundColor: 'var(--bg-card)',
-              borderColor: 'var(--border-strong)',
-              boxShadow: 'var(--shadow-float)',
-              userSelect: 'none',
-              WebkitUserSelect: 'none',
-            }}
-            className="z-50 px-2.5 py-1.5 rounded-2xl border flex items-center gap-1.5 font-sans select-none animate-float-in"
-          >
-            {/* 四色精准划线 */}
-            <div className="flex items-center gap-1.5 pr-1.5 border-r" style={{ borderColor: 'var(--border)' }}>
-              {HIGHLIGHT_COLORS.map((c) => (
-                <button
-                  key={c.id}
-                  onClick={() => handleQuickUnderline(c.id)}
-                  title={`${c.label}划线`}
-                  className="w-5 h-5 rounded-full border-2 border-white/80 transition-transform hover:scale-115 active:scale-95"
-                  style={{ backgroundColor: c.dot }}
-                />
-              ))}
-            </div>
+        <div
+          data-selection-toolbar="true"
+          onMouseDown={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+          }}
+          onTouchStart={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+          style={
+            isMobileTapMode
+              ? {
+                  backgroundColor: 'var(--bg-card)',
+                  borderColor: 'var(--border-strong)',
+                  boxShadow: 'var(--shadow-float)',
+                  userSelect: 'none',
+                  WebkitUserSelect: 'none',
+                }
+              : {
+                  position: 'fixed',
+                  left: `${Math.max(195, Math.min(window.innerWidth - 195, selectionMenu.x))}px`,
+                  top: `${selectionMenu.y}px`,
+                  transform: selectionMenu.placeBelow ? 'translate(-50%, 0)' : 'translate(-50%, -100%)',
+                  backgroundColor: 'var(--bg-card)',
+                  borderColor: 'var(--border-strong)',
+                  boxShadow: 'var(--shadow-float)',
+                  userSelect: 'none',
+                  WebkitUserSelect: 'none',
+                }
+          }
+          className={
+            isMobileTapMode
+              ? 'fixed inset-x-3 bottom-4 z-50 rounded-2xl border p-2.5 space-y-2 font-sans select-none safe-bottom animate-sheet-up'
+              : 'z-50 rounded-2xl border p-2 space-y-1.5 font-sans select-none animate-float-in max-w-[94vw]'
+          }
+        >
+          {/* 第一排：核心操作图标+中文标签（复制 / 搜索 / 翻译 / 朗读 / 批注 / AI / 金句 / 术语） */}
+          <div className="flex items-center gap-0.5 overflow-x-auto no-scrollbar">
+            <button
+              onClick={() => handleCopyCitation(selectionMenu.text)}
+              className="px-2.5 py-1.5 rounded-xl flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium shrink-0 hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all"
+              style={{ color: 'var(--text)' }}
+              title="复制带出处引用"
+            >
+              {copiedFlag ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+              <span>复制</span>
+            </button>
 
             <button
-              onClick={() => handleOpenNewNoteComposer('amber')}
-              className="px-2.5 py-1 rounded-xl text-xs font-medium flex items-center gap-1 text-white transition-transform active:scale-95"
-              style={{ backgroundColor: 'var(--accent)' }}
+              onClick={() => {
+                const q = selectionMenu.text.slice(0, 36)
+                clearNativeSelection()
+                setShowInBookSearch(true)
+                handleRunInBookSearch(q)
+              }}
+              className="px-2.5 py-1.5 rounded-xl flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium shrink-0 hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all"
+              style={{ color: 'var(--text)' }}
+              title="在本书中搜索选中词句"
             >
-              <MessageSquarePlus className="w-3.5 h-3.5" />
+              <Search className="w-4 h-4" />
+              <span>搜索</span>
+            </button>
+
+            <button
+              onClick={() => {
+                triggerHaptic()
+                const snap = selectionMenu
+                clearNativeSelection()
+                runSelectionTranslation(snap.text, undefined, {
+                  spans: snap.spans,
+                  blockIndex: snap.blockIndex,
+                  startOffset: snap.startOffset,
+                  endOffset: snap.endOffset,
+                })
+              }}
+              className="px-2.5 py-1.5 rounded-xl flex flex-col items-center justify-center gap-0.5 text-[11px] font-semibold shrink-0 hover:opacity-90 active:scale-95 transition-all"
+              style={{ color: 'var(--accent)', backgroundColor: 'var(--accent-soft)' }}
+              title="翻译选中内容（支持 6 大在线引擎 + 离线引擎）"
+            >
+              <Languages className="w-4 h-4" />
+              <span>翻译</span>
+            </button>
+
+            <button
+              onClick={() => {
+                triggerHaptic()
+                const blkIdx = selectionMenu.blockIndex
+                clearNativeSelection()
+                onPlayRadioFrom(bookId, chapterIndex, blkIdx)
+                notifyToast('已从此段开启微软电台朗读')
+              }}
+              className="px-2.5 py-1.5 rounded-xl flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium shrink-0 hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all"
+              style={{ color: 'var(--text)' }}
+              title="从此段开启电台朗读"
+            >
+              <Headphones className="w-4 h-4" />
+              <span>朗读</span>
+            </button>
+
+            <button
+              onClick={() => {
+                triggerHaptic()
+                handleOpenNewNoteComposer('sky')
+              }}
+              className="px-2.5 py-1.5 rounded-xl flex flex-col items-center justify-center gap-0.5 text-[11px] font-semibold shrink-0 hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all"
+              style={{ color: 'var(--accent)' }}
+              title="为选中内容写批注"
+            >
+              <MessageSquarePlus className="w-4 h-4" />
               <span>批注</span>
+            </button>
+
+            <button
+              onClick={() => {
+                triggerHaptic()
+                const snap = selectionMenu
+                clearNativeSelection()
+                setAiQuoteContext({
+                  text: snap.text,
+                  spans: snap.spans,
+                  blockIndex: snap.blockIndex,
+                  startOffset: snap.startOffset,
+                  endOffset: snap.endOffset,
+                })
+                setAiDrawerOpen(true)
+              }}
+              className="px-2.5 py-1.5 rounded-xl flex flex-col items-center justify-center gap-0.5 text-[11px] font-semibold shrink-0 hover:opacity-90 active:scale-95 transition-all"
+              style={{ color: 'var(--accent)', backgroundColor: 'var(--accent-soft)' }}
+              title="选中内容问 AI"
+            >
+              <Bot className="w-4 h-4" />
+              <span>AI</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setQuoteText(selectionMenu.text)
+                clearNativeSelection()
+              }}
+              className="px-2.5 py-1.5 rounded-xl flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium shrink-0 hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all"
+              style={{ color: 'var(--text)' }}
+              title="生成哲学金句藏书票"
+            >
+              <Sparkles className="w-4 h-4" style={{ color: 'var(--gold)' }} />
+              <span>金句卡</span>
             </button>
 
             {selectionGlossary.length > 0 && (
@@ -2117,50 +2675,341 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                   clearNativeSelection()
                   setActiveGlossaryModal({ query: q, entries })
                 }}
-                className="px-2 py-1 rounded-xl text-xs font-medium flex items-center gap-1 hover:opacity-85"
-                style={{ backgroundColor: 'rgba(180, 81, 42, 0.14)', color: 'var(--accent)' }}
+                className="px-2.5 py-1.5 rounded-xl flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium shrink-0 active:scale-95 transition-all"
+                style={{ color: 'var(--accent)' }}
                 title="查看哲学辞典术语释义"
               >
-                <BookMarked className="w-3.5 h-3.5" />
+                <BookMarked className="w-4 h-4" />
                 <span>术语</span>
               </button>
             )}
-
-            <button
-              onClick={() => {
-                setQuoteText(selectionMenu.text)
-                clearNativeSelection()
-              }}
-              className="px-2 py-1 rounded-xl text-xs flex items-center gap-1 hover:opacity-80"
-              style={{ backgroundColor: 'var(--bg-elevated)', color: 'var(--text)' }}
-            >
-              <Sparkles className="w-3.5 h-3.5" style={{ color: 'var(--gold)' }} />
-              <span className="hidden sm:inline">金句卡</span>
-            </button>
-
-            <button
-              onClick={() => handleCopyCitation(selectionMenu.text)}
-              className="px-2 py-1 rounded-xl text-xs flex items-center gap-1 hover:opacity-80"
-              style={{ backgroundColor: 'var(--bg-elevated)', color: 'var(--text)' }}
-            >
-              {copiedFlag ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-              <span className="hidden sm:inline">引用</span>
-            </button>
-
-            <button
-              onClick={() => {
-                const blkIdx = selectionMenu.blockIndex
-                clearNativeSelection()
-                onPlayRadioFrom(bookId, chapterIndex, blkIdx)
-              }}
-              title="从此处开启电台朗读"
-              className="p-1.5 rounded-xl hover:opacity-80"
-              style={{ backgroundColor: 'var(--bg-elevated)', color: 'var(--accent)' }}
-            >
-              <Headphones className="w-3.5 h-3.5" />
-            </button>
           </div>
-        )
+
+          {/* 第二排（对应图一红线标注排）：删除划线 | 荧光高亮 / 下划线样式切换 | 5 色标注圆点 | 关闭 */}
+          <div
+            className="flex items-center justify-between gap-2 pt-1.5 border-t px-1"
+            style={{ borderColor: 'var(--border)' }}
+          >
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => {
+                  triggerHaptic()
+                  handleDeleteOverlappingSelectionHighlights()
+                }}
+                disabled={overlappingHighlights.length === 0}
+                title={overlappingHighlights.length > 0 ? '清除所选区域的已有划线' : '所选区域暂无划线'}
+                className="w-7 h-7 rounded-lg flex items-center justify-center transition-all disabled:opacity-30 hover:bg-red-500/10 text-red-500 active:scale-90"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+
+              <span className="w-px h-4 opacity-40" style={{ backgroundColor: 'var(--border-strong)' }} />
+
+              <button
+                onClick={() => {
+                  triggerHaptic()
+                  handleToggleHighlightStyle('highlight')
+                }}
+                title="荧光高亮背景样式"
+                className="w-7 h-7 rounded-lg flex items-center justify-center transition-all active:scale-90"
+                style={
+                  highlightStyle === 'highlight'
+                    ? { backgroundColor: 'var(--accent-soft)', color: 'var(--accent)' }
+                    : { color: 'var(--text-muted)' }
+                }
+              >
+                <Highlighter className="w-4 h-4" />
+              </button>
+
+              <button
+                onClick={() => {
+                  triggerHaptic()
+                  handleToggleHighlightStyle('underline')
+                }}
+                title="精致下划线样式"
+                className="w-7 h-7 rounded-lg flex items-center justify-center transition-all active:scale-90"
+                style={
+                  highlightStyle === 'underline'
+                    ? { backgroundColor: 'var(--accent-soft)', color: 'var(--accent)' }
+                    : { color: 'var(--text-muted)' }
+                }
+              >
+                <Underline className="w-4 h-4" />
+              </button>
+
+              <span className="w-px h-4 opacity-40" style={{ backgroundColor: 'var(--border-strong)' }} />
+
+              <div className="flex items-center gap-2">
+                {HIGHLIGHT_COLORS.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => {
+                      triggerHaptic()
+                      handleQuickUnderline(c.id)
+                    }}
+                    title={`${c.label}${highlightStyle === 'underline' ? '下划线' : '荧光高亮'}`}
+                    className="w-6 h-6 md:w-5 md:h-5 rounded-full border-2 border-white/85 shadow-sm transition-transform hover:scale-115 active:scale-90"
+                    style={{ backgroundColor: c.dot }}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {isMobileTapMode && (
+              <button
+                onClick={() => clearNativeSelection()}
+                className="w-7 h-7 rounded-lg flex items-center justify-center opacity-70 active:scale-90"
+                style={{ backgroundColor: 'var(--bg-elevated)', color: 'var(--text-muted)' }}
+                aria-label="取消选中"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 划词即时翻译浮卡（支持一键切换 6 大在线引擎 + 离线引擎、切换语言、存入批注、问 AI） */}
+      {translationPopup && (
+        <>
+          {isMobileTapMode && (
+            <div
+              className="fixed inset-0 z-40 bg-black/35 animate-backdrop-in"
+              onClick={() => setTranslationPopup(null)}
+            />
+          )}
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className={
+              isMobileTapMode
+                ? 'fixed inset-x-3 bottom-4 z-50 rounded-2xl border p-4 space-y-3 font-sans safe-bottom shadow-2xl animate-sheet-up max-h-[78vh] flex flex-col'
+                : 'fixed left-1/2 -translate-x-1/2 bottom-8 z-50 w-[460px] max-w-[94vw] rounded-2xl border p-4 space-y-3 font-sans shadow-2xl animate-float-in max-h-[76vh] flex flex-col'
+            }
+            style={{
+              backgroundColor: 'var(--bg-card)',
+              borderColor: 'var(--border-strong)',
+              boxShadow: 'var(--shadow-float)',
+            }}
+          >
+            {/* 顶栏：引擎与目标语言速切 + 设置 + 关闭 */}
+            <div className="flex items-center justify-between gap-2 shrink-0">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <Languages className="w-4 h-4 shrink-0" style={{ color: 'var(--accent)' }} />
+                <span className="text-xs font-bold truncate">
+                  {getEngineMeta(translationPopup.engine).name}
+                </span>
+                <select
+                  value={translationSettings.targetLang}
+                  onChange={(e) => {
+                    const nextLang = e.target.value
+                    onUpdateTranslationSettings({ targetLang: nextLang })
+                    const nextSettings = { ...translationSettings, targetLang: nextLang }
+                    setTranslationPopup((prev) => (prev ? { ...prev, loading: true, error: null } : null))
+                    translateText(translationPopup.text, nextSettings, aiSettings, translationPopup.engine)
+                      .then((res) =>
+                        setTranslationPopup((prev) => (prev ? { ...prev, loading: false, result: res, error: null } : null))
+                      )
+                      .catch((err: any) =>
+                        setTranslationPopup((prev) =>
+                          prev ? { ...prev, loading: false, result: null, error: err?.message || '翻译失败' } : null
+                        )
+                      )
+                  }}
+                  className="px-2 py-0.5 rounded-lg border text-[11px] outline-none"
+                  style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }}
+                >
+                  {TRANSLATION_LANGUAGES.filter((l) => l.code !== 'auto').map((l) => (
+                    <option key={l.code} value={l.code}>
+                      → {l.nativeLabel}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  onClick={onOpenTranslationSettings}
+                  className="p-1.5 rounded-lg hover:opacity-80"
+                  style={{ color: 'var(--text-secondary)' }}
+                  title="打开翻译服务配置"
+                >
+                  <Settings2 className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setTranslationPopup(null)}
+                  className="p-1.5 rounded-lg hover:opacity-75"
+                  aria-label="关闭翻译"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* 引擎快捷切换胶囊条 */}
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar shrink-0">
+              {TRANSLATION_ENGINES.map((eng) => {
+                const active = translationPopup.engine === eng.id
+                return (
+                  <button
+                    key={eng.id}
+                    onClick={() => {
+                      triggerHaptic()
+                      onUpdateTranslationSettings({ activeEngine: eng.id })
+                      runSelectionTranslation(translationPopup.text, eng.id, {
+                        spans: translationPopup.spans,
+                        blockIndex: translationPopup.blockIndex,
+                        startOffset: translationPopup.startOffset,
+                        endOffset: translationPopup.endOffset,
+                      })
+                    }}
+                    className="px-2.5 py-1 rounded-full text-[11px] font-medium border shrink-0 transition-all"
+                    style={
+                      active
+                        ? { backgroundColor: 'var(--accent)', color: '#fff', borderColor: 'var(--accent)' }
+                        : { backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }
+                    }
+                  >
+                    {eng.shortName}
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* 原文 + 译文展示区 */}
+            <div className="flex-1 overflow-y-auto overscroll-contain space-y-2.5 pr-0.5">
+              <div
+                className="p-2.5 rounded-xl text-xs font-serif leading-relaxed line-clamp-3"
+                style={{ backgroundColor: 'var(--bg)', color: 'var(--text-muted)' }}
+              >
+                {translationPopup.text}
+              </div>
+
+              {translationPopup.loading ? (
+                <div className="py-6 flex items-center justify-center gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+                  <Loader2 className="w-4 h-4 animate-spin" style={{ color: 'var(--accent)' }} />
+                  <span>正在通过 {getEngineMeta(translationPopup.engine).name} 翻译…</span>
+                </div>
+              ) : translationPopup.error ? (
+                <div
+                  className="p-3 rounded-xl border text-xs space-y-2"
+                  style={{ backgroundColor: 'rgba(239, 68, 68, 0.08)', borderColor: 'rgba(239, 68, 68, 0.3)', color: '#dc2626' }}
+                >
+                  <div>{translationPopup.error}</div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => {
+                        onUpdateTranslationSettings({ activeEngine: 'offline' })
+                        runSelectionTranslation(translationPopup.text, 'offline', {
+                          spans: translationPopup.spans,
+                          blockIndex: translationPopup.blockIndex,
+                          startOffset: translationPopup.startOffset,
+                          endOffset: translationPopup.endOffset,
+                        })
+                      }}
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-medium text-white"
+                      style={{ backgroundColor: 'var(--accent)' }}
+                    >
+                      改用离线翻译引擎
+                    </button>
+                    <button
+                      onClick={onOpenTranslationSettings}
+                      className="px-2.5 py-1 rounded-lg border text-[11px] font-medium"
+                      style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border)', color: 'var(--text)' }}
+                    >
+                      检查密钥/设置
+                    </button>
+                  </div>
+                </div>
+              ) : translationPopup.result ? (
+                <div className="space-y-2">
+                  <div
+                    className="p-3 rounded-xl text-[13px] leading-relaxed select-text border"
+                    style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border)', color: 'var(--text)' }}
+                  >
+                    {translationPopup.result.translatedText}
+                  </div>
+                  {translationPopup.result.termNotes && translationPopup.result.termNotes.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pt-0.5">
+                      {translationPopup.result.termNotes.map((tn, idx) => (
+                        <span
+                          key={idx}
+                          className="px-2 py-0.5 rounded-lg text-[10px] border"
+                          style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+                        >
+                          <strong>{tn.source}</strong> → {tn.target}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </div>
+
+            {/* 底部操作：复制译文 / 存入批注 / 问 AI */}
+            <div className="flex items-center justify-between gap-2 pt-2 border-t shrink-0" style={{ borderColor: 'var(--border)' }}>
+              <button
+                onClick={() => {
+                  const textToCopy = translationPopup.result?.translatedText || ''
+                  if (!textToCopy) return
+                  navigator.clipboard?.writeText(textToCopy).catch(() => {})
+                  notifyToast('已复制译文')
+                }}
+                disabled={!translationPopup.result}
+                className="px-3 py-1.5 rounded-xl border text-xs font-medium flex items-center gap-1 disabled:opacity-40"
+                style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)' }}
+              >
+                <Copy className="w-3.5 h-3.5" />
+                <span>复制译文</span>
+              </button>
+
+              <div className="flex items-center gap-1.5">
+                {translationPopup.result && typeof translationPopup.blockIndex === 'number' && (
+                  <button
+                    onClick={() => {
+                      const tr = translationPopup.result!.translatedText
+                      setNoteComposer({
+                        mode: 'new',
+                        spans: translationPopup.spans,
+                        blockIndex: translationPopup.blockIndex!,
+                        startOffset: translationPopup.startOffset,
+                        endOffset: translationPopup.endOffset,
+                        text: translationPopup.text,
+                        color: 'sky',
+                        style: highlightStyle,
+                        note: `【译文】${tr}`,
+                      })
+                      setTranslationPopup(null)
+                    }}
+                    className="px-3 py-1.5 rounded-xl border text-xs font-medium flex items-center gap-1"
+                    style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--accent)' }}
+                  >
+                    <BookmarkPlus className="w-3.5 h-3.5" />
+                    <span>存为批注</span>
+                  </button>
+                )}
+
+                <button
+                  onClick={() => {
+                    const q = translationPopup.text
+                    setAiQuoteContext({
+                      text: q,
+                      spans: translationPopup.spans,
+                      blockIndex: translationPopup.blockIndex,
+                      startOffset: translationPopup.startOffset,
+                      endOffset: translationPopup.endOffset,
+                    })
+                    setTranslationPopup(null)
+                    setAiDrawerOpen(true)
+                  }}
+                  className="px-3 py-1.5 rounded-xl text-xs font-semibold text-white flex items-center gap-1"
+                  style={{ backgroundColor: 'var(--accent)' }}
+                >
+                  <Bot className="w-3.5 h-3.5" />
+                  <span>问 AI</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
       )}
 
       {/* 点击已有划线/「注」角标弹出的查看与编辑卡（手机端底部锚定阅读卡，绝不截断） */}
@@ -2219,57 +3068,155 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
               </div>
             )}
 
-            {/* 快捷换色 + 操作 */}
-            <div className="flex items-center justify-between pt-2.5 border-t" style={{ borderColor: 'var(--border)' }}>
-              <div className="flex items-center gap-2">
-                {HIGHLIGHT_COLORS.map((c) => (
+            {/* 快捷切换高亮/下划线样式 + 5 色 + 操作 */}
+            <div className="space-y-2.5 pt-2.5 border-t" style={{ borderColor: 'var(--border)' }}>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5">
                   <button
-                    key={c.id}
                     onClick={() => {
                       triggerHaptic()
                       const it = inspectHighlight.item
+                      const nextStyle: HighlightStyle = 'highlight'
                       if (it.groupId) {
                         const groupItems = highlights
                           .filter((h) => h.groupId === it.groupId)
-                          .map((h) => ({ ...h, color: c.id }))
+                          .map((h) => ({ ...h, style: nextStyle }))
                         if (groupItems.length > 0) onAddHighlight(groupItems)
                       } else {
-                        onAddHighlight({ ...it, color: c.id })
+                        onAddHighlight({ ...it, style: nextStyle })
                       }
-                      setInspectHighlight({ ...inspectHighlight, item: { ...it, color: c.id } })
+                      setInspectHighlight({ ...inspectHighlight, item: { ...it, style: nextStyle } })
                     }}
-                    className={`w-5 h-5 md:w-4 md:h-4 rounded-full ${
-                      inspectHighlight.item.color === c.id ? 'ring-2 ring-offset-1 ring-[var(--accent)]' : ''
-                    }`}
-                    style={{ backgroundColor: c.dot }}
-                    title={`切换为${c.label}划线`}
-                  />
-                ))}
-              </div>
+                    className="w-7 h-7 rounded-lg flex items-center justify-center"
+                    style={
+                      (inspectHighlight.item.style || 'highlight') === 'highlight'
+                        ? { backgroundColor: 'var(--accent-soft)', color: 'var(--accent)' }
+                        : { color: 'var(--text-muted)' }
+                    }
+                    title="切换为荧光高亮"
+                  >
+                    <Highlighter className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      triggerHaptic()
+                      const it = inspectHighlight.item
+                      const nextStyle: HighlightStyle = 'underline'
+                      if (it.groupId) {
+                        const groupItems = highlights
+                          .filter((h) => h.groupId === it.groupId)
+                          .map((h) => ({ ...h, style: nextStyle }))
+                        if (groupItems.length > 0) onAddHighlight(groupItems)
+                      } else {
+                        onAddHighlight({ ...it, style: nextStyle })
+                      }
+                      setInspectHighlight({ ...inspectHighlight, item: { ...it, style: nextStyle } })
+                    }}
+                    className="w-7 h-7 rounded-lg flex items-center justify-center"
+                    style={
+                      inspectHighlight.item.style === 'underline'
+                        ? { backgroundColor: 'var(--accent-soft)', color: 'var(--accent)' }
+                        : { color: 'var(--text-muted)' }
+                    }
+                    title="切换为下划线"
+                  >
+                    <Underline className="w-3.5 h-3.5" />
+                  </button>
 
-              <div className="flex items-center gap-1.5">
+                  <span className="w-px h-4 mx-0.5 opacity-40" style={{ backgroundColor: 'var(--border-strong)' }} />
+
+                  {HIGHLIGHT_COLORS.map((c) => (
+                    <button
+                      key={c.id}
+                      onClick={() => {
+                        triggerHaptic()
+                        const it = inspectHighlight.item
+                        if (it.groupId) {
+                          const groupItems = highlights
+                            .filter((h) => h.groupId === it.groupId)
+                            .map((h) => ({ ...h, color: c.id }))
+                          if (groupItems.length > 0) onAddHighlight(groupItems)
+                        } else {
+                          onAddHighlight({ ...it, color: c.id })
+                        }
+                        setInspectHighlight({ ...inspectHighlight, item: { ...it, color: c.id } })
+                      }}
+                      className={`w-5 h-5 md:w-4 md:h-4 rounded-full ${
+                        inspectHighlight.item.color === c.id ? 'ring-2 ring-offset-1 ring-[var(--accent)]' : ''
+                      }`}
+                      style={{ backgroundColor: c.dot }}
+                      title={`切换为${c.label}`}
+                    />
+                  ))}
+                </div>
+
                 <button
                   onClick={() => {
-                    const it = inspectHighlight.item
+                    onDeleteHighlight(inspectHighlight.item.id)
                     setInspectHighlight(null)
-                    setNoteComposer({
-                      mode: 'edit',
-                      existingId: it.id,
-                      existingGroupId: it.groupId,
-                      blockIndex: it.blockIndex,
-                      startOffset: it.startOffset,
-                      endOffset: it.endOffset,
-                      text: it.text,
-                      color: it.color,
-                      note: it.note,
-                    })
+                    notifyToast('已删除划线与批注')
                   }}
-                  className="px-2.5 py-1.5 rounded-xl text-xs md:text-[11px] font-medium flex items-center gap-1"
-                  style={{ backgroundColor: 'var(--accent-soft)', color: 'var(--accent)' }}
+                  className="p-1.5 rounded-xl text-red-500 hover:bg-red-500/10"
+                  title="删除此条划线"
                 >
-                  <Pencil className="w-3 h-3" />
-                  <span>{inspectHighlight.item.note ? '编辑' : '写批注'}</span>
+                  <Trash2 className="w-4 h-4 md:w-3.5 md:h-3.5" />
                 </button>
+              </div>
+
+              <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => {
+                      const it = inspectHighlight.item
+                      setInspectHighlight(null)
+                      setNoteComposer({
+                        mode: 'edit',
+                        existingId: it.id,
+                        existingGroupId: it.groupId,
+                        blockIndex: it.blockIndex,
+                        startOffset: it.startOffset,
+                        endOffset: it.endOffset,
+                        text: it.text,
+                        color: it.color,
+                        style: it.style || 'highlight',
+                        note: it.note,
+                      })
+                    }}
+                    className="px-2.5 py-1.5 rounded-xl text-xs md:text-[11px] font-medium flex items-center gap-1"
+                    style={{ backgroundColor: 'var(--accent-soft)', color: 'var(--accent)' }}
+                  >
+                    <Pencil className="w-3 h-3" />
+                    <span>{inspectHighlight.item.note ? '编辑批注' : '写批注'}</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      const it = inspectHighlight.item
+                      setInspectHighlight(null)
+                      runSelectionTranslation(it.text)
+                    }}
+                    className="px-2.5 py-1.5 rounded-xl text-xs md:text-[11px] border flex items-center gap-1"
+                    style={{ borderColor: 'var(--border)' }}
+                  >
+                    <Languages className="w-3 h-3" style={{ color: 'var(--accent)' }} />
+                    <span>翻译</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      const it = inspectHighlight.item
+                      setInspectHighlight(null)
+                      setAiQuoteContext({ text: it.text, blockIndex: it.blockIndex })
+                      setAiDrawerOpen(true)
+                    }}
+                    className="px-2.5 py-1.5 rounded-xl text-xs md:text-[11px] border flex items-center gap-1"
+                    style={{ borderColor: 'var(--border)' }}
+                  >
+                    <Bot className="w-3 h-3" style={{ color: 'var(--accent)' }} />
+                    <span>问 AI</span>
+                  </button>
+                </div>
+
                 <button
                   onClick={() => {
                     setQuoteText(inspectHighlight.item.text)
@@ -2279,17 +3226,6 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                   style={{ borderColor: 'var(--border)' }}
                 >
                   金句卡
-                </button>
-                <button
-                  onClick={() => {
-                    onDeleteHighlight(inspectHighlight.item.id)
-                    setInspectHighlight(null)
-                    notifyToast('已删除划线与批注')
-                  }}
-                  className="p-2 md:p-1.5 rounded-xl text-red-500 hover:bg-red-500/10"
-                  title="删除此条划线"
-                >
-                  <Trash2 className="w-4 h-4 md:w-3.5 md:h-3.5" />
                 </button>
               </div>
             </div>
@@ -2328,51 +3264,144 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
               {noteComposer.text}
             </div>
 
-            <div className="flex items-center gap-2 text-xs">
-              <span style={{ color: 'var(--text-muted)' }}>划线墨色：</span>
-              {HIGHLIGHT_COLORS.map((c) => (
+            {/* 标注样式（荧光高亮 / 下划线）与 5 色选择 */}
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-1 p-0.5 rounded-xl border" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)' }}>
                 <button
-                  key={c.id}
-                  onClick={() => setNoteComposer({ ...noteComposer, color: c.id })}
-                  className={`px-2 py-1 rounded-full border text-[11px] flex items-center gap-1 ${
-                    noteComposer.color === c.id ? 'font-bold' : 'opacity-70'
-                  }`}
-                  style={{
-                    borderColor: noteComposer.color === c.id ? c.dot : 'var(--border)',
-                    backgroundColor: noteComposer.color === c.id ? `${c.dot}22` : 'transparent',
-                  }}
+                  onClick={() => setNoteComposer({ ...noteComposer, style: 'highlight' })}
+                  className="px-2.5 py-1 rounded-lg text-[11px] font-medium flex items-center gap-1"
+                  style={
+                    noteComposer.style === 'highlight'
+                      ? { backgroundColor: 'var(--accent)', color: '#fff' }
+                      : { color: 'var(--text-secondary)' }
+                  }
                 >
-                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: c.dot }} />
-                  <span>{c.label}</span>
+                  <Highlighter className="w-3 h-3" />
+                  <span>高亮</span>
                 </button>
-              ))}
+                <button
+                  onClick={() => setNoteComposer({ ...noteComposer, style: 'underline' })}
+                  className="px-2.5 py-1 rounded-lg text-[11px] font-medium flex items-center gap-1"
+                  style={
+                    noteComposer.style === 'underline'
+                      ? { backgroundColor: 'var(--accent)', color: '#fff' }
+                      : { color: 'var(--text-secondary)' }
+                  }
+                >
+                  <Underline className="w-3 h-3" />
+                  <span>下划线</span>
+                </button>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                {HIGHLIGHT_COLORS.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => setNoteComposer({ ...noteComposer, color: c.id })}
+                    title={c.label}
+                    className={`w-6 h-6 rounded-full border-2 border-white/85 transition-transform active:scale-90 ${
+                      noteComposer.color === c.id ? 'ring-2 ring-offset-1 ring-[var(--accent)] scale-110' : 'opacity-75'
+                    }`}
+                    style={{ backgroundColor: c.dot }}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* 快捷学术标签 + AI 辅助批注 */}
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {NOTE_QUICK_TAGS.map((tag) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() =>
+                      setNoteComposer((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              note: prev.note.includes(tag)
+                                ? prev.note
+                                : prev.note
+                                ? `${prev.note} ${tag}`
+                                : `${tag} `,
+                            }
+                          : null
+                      )
+                    }
+                    className="px-2 py-0.5 rounded-full border text-[10px] hover:opacity-85"
+                    style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={handleAiGenerateNoteDraft}
+                disabled={aiDraftingNote}
+                className="px-2.5 py-1 rounded-full text-[11px] font-medium flex items-center gap-1 disabled:opacity-50"
+                style={{ backgroundColor: 'var(--accent-soft)', color: 'var(--accent)' }}
+                title="调用 AI API 自动生成一段精炼学术批注草稿"
+              >
+                {aiDraftingNote ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />}
+                <span>{aiDraftingNote ? '生成中…' : 'AI 辅助批注'}</span>
+              </button>
             </div>
 
             <textarea
               autoFocus
               value={noteComposer.note}
               onChange={(e) => setNoteComposer({ ...noteComposer, note: e.target.value })}
-              placeholder="写下你对选中语句的哲学思考、概念辨析或评注…"
-              rows={4}
+              onKeyDown={(e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                  e.preventDefault()
+                  handleSaveComposer()
+                }
+              }}
+              placeholder="写下你对选中语句的哲学思考、概念辨析或评注…（Ctrl+Enter 快捷保存）"
+              rows={5}
               className="w-full rounded-xl border p-3 text-xs leading-relaxed outline-none resize-none"
               style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border-strong)', color: 'var(--text)' }}
             />
 
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setNoteComposer(null)}
-                className="px-3.5 py-2 rounded-xl text-xs border"
-                style={{ borderColor: 'var(--border)' }}
-              >
-                取消
-              </button>
-              <button
-                onClick={handleSaveComposer}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-white"
-                style={{ backgroundColor: 'var(--accent)' }}
-              >
-                保存划线批注
-              </button>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                {noteComposer.mode === 'edit' && noteComposer.existingId && (
+                  <button
+                    onClick={() => {
+                      onDeleteHighlight(noteComposer.existingId!)
+                      setNoteComposer(null)
+                      notifyToast('已删除划线与批注')
+                    }}
+                    className="px-3 py-2 rounded-xl text-xs text-red-500 border border-red-500/30 hover:bg-red-500/10 flex items-center gap-1"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>删除</span>
+                  </button>
+                )}
+                <span className="text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>
+                  {noteComposer.note.length} 字
+                </span>
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setNoteComposer(null)}
+                  className="px-3.5 py-2 rounded-xl text-xs border"
+                  style={{ borderColor: 'var(--border)' }}
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleSaveComposer}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-white"
+                  style={{ backgroundColor: 'var(--accent)' }}
+                >
+                  保存划线批注
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -2381,7 +3410,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
       {/* 左侧目录抽屉 */}
       {showToc && meta && (
         <div
-          className={`${settings.dockTocOnWide ? 'xl:hidden' : ''} fixed inset-0 z-40 flex bg-black/45 backdrop-blur-[2px]`}
+          className={`${settings.dockTocOnWide ? 'xl:hidden' : ''} fixed inset-0 z-50 flex bg-black/45 backdrop-blur-[2px]`}
           onClick={() => setShowToc(false)}
         >
           <aside
@@ -2966,6 +3995,47 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
           author={meta.author}
           chapterTitle={chapter.title}
           onClose={() => setQuoteText(null)}
+        />
+      )}
+
+      {/* 阅读器内嵌 AI 哲思伴读抽屉（支持选中内容问 AI & 一键将 AI 回复存入批注） */}
+      {aiDrawerOpen && (
+        <AiAssistantPanel
+          variant="drawer"
+          aiSettings={aiSettings}
+          conversations={aiConversations}
+          onSaveConversations={onSaveAiConversations}
+          readingContext={
+            {
+              bookId,
+              bookTitle: meta?.title,
+              author: meta?.author,
+              chapterIndex,
+              chapterTitle: chapter?.title,
+              selectedText: aiQuoteContext?.text,
+            } as AiReadingContext
+          }
+          onClearQuote={() => setAiQuoteContext(null)}
+          onOpenAiSettings={onOpenAiSettings}
+          onOpenTranslationSettings={onOpenTranslationSettings}
+          onSaveAsNote={(aiReply, quote) => {
+            if (!meta || !chapter) return
+            const targetText = quote || aiQuoteContext?.text || chapter.title
+            const targetBlk = aiQuoteContext?.blockIndex ?? 0
+            setNoteComposer({
+              mode: 'new',
+              spans: aiQuoteContext?.spans,
+              blockIndex: targetBlk,
+              startOffset: aiQuoteContext?.startOffset,
+              endOffset: aiQuoteContext?.endOffset,
+              text: targetText,
+              color: 'indigo',
+              style: highlightStyle,
+              note: `【AI 解读】\n${aiReply}`,
+            })
+            setAiDrawerOpen(false)
+          }}
+          onClose={() => setAiDrawerOpen(false)}
         />
       )}
     </div>

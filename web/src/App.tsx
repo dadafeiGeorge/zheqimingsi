@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { BookmarkCheck, Library, Radio } from 'lucide-react'
+import { BookmarkCheck, Library, Radio, Sparkles } from 'lucide-react'
 import type {
+  AiConversation,
+  AiSettings,
   AppTab,
   BookCatalogItem,
   BookmarkItem,
@@ -11,6 +13,7 @@ import type {
   ReaderSettings,
   ReadingProgress,
   StudyStats,
+  TranslationSettings,
 } from './types'
 import { fetchCatalog, getInitialCatalogSync } from './services/libraryApi'
 import { radioEngine } from './services/radioEngine'
@@ -24,6 +27,8 @@ import {
 } from './services/platform'
 import {
   DEFAULT_READER_SETTINGS,
+  loadAiConversations,
+  loadAiSettings,
   loadAllProgress,
   loadBookmarks,
   loadFavorites,
@@ -32,11 +37,15 @@ import {
   loadRadioSettings,
   loadReaderSettings,
   loadStats,
+  loadTranslationSettings,
+  saveAiConversations,
+  saveAiSettings,
   saveBookmarks,
   saveFavorites,
   saveHighlights,
   saveRadioQueue,
   saveReaderSettings,
+  saveTranslationSettings,
 } from './services/storage'
 import { TitleBar } from './components/TitleBar'
 import { LibraryView } from './components/LibraryView'
@@ -44,6 +53,9 @@ import { ReaderView } from './components/ReaderView'
 import { RadioStudioView } from './components/RadioStudioView'
 import { NotesHubView } from './components/NotesHubView'
 import { MiniRadioDock } from './components/MiniRadioDock'
+import { AiAssistantPanel } from './components/AiAssistantPanel'
+import { AiSettingsModal } from './components/AiSettingsModal'
+import { TranslationSettingsModal } from './components/TranslationSettingsModal'
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<AppTab>('library')
@@ -63,6 +75,11 @@ export default function App() {
   const [bookmarks, setBookmarks] = useState<BookmarkItem[]>(() => loadBookmarks())
   const [radioQueue, setRadioQueue] = useState<RadioQueueItem[]>(() => loadRadioQueue())
   const [stats, setStats] = useState<StudyStats>(() => loadStats())
+  const [translationSettings, setTranslationSettings] = useState<TranslationSettings>(() => loadTranslationSettings())
+  const [aiSettings, setAiSettings] = useState<AiSettings>(() => loadAiSettings())
+  const [aiConversations, setAiConversations] = useState<AiConversation[]>(() => loadAiConversations())
+  const [showTranslationSettings, setShowTranslationSettings] = useState(false)
+  const [showAiSettings, setShowAiSettings] = useState(false)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
 
   const [readerTarget, setReaderTarget] = useState<{
@@ -289,6 +306,27 @@ export default function App() {
     setRadioSettings(radioEngine.getSettings())
   }
 
+  const handleUpdateTranslationSettings = (partial: Partial<TranslationSettings>) => {
+    setTranslationSettings((prev) => {
+      const next = { ...prev, ...partial }
+      saveTranslationSettings(next)
+      return next
+    })
+  }
+
+  const handleUpdateAiSettings = (partial: Partial<AiSettings>) => {
+    setAiSettings((prev) => {
+      const next = { ...prev, ...partial }
+      saveAiSettings(next)
+      return next
+    })
+  }
+
+  const handleSaveAiConversations = (next: AiConversation[]) => {
+    setAiConversations(next)
+    saveAiConversations(next)
+  }
+
   const handleOpenBook = useCallback(
     (bookId: string, chapterIndex?: number, blockIndex = 0) => {
       const book = books.find((b) => b.id === bookId)
@@ -342,6 +380,8 @@ export default function App() {
     setRadioQueue(loadRadioQueue())
     setStats(loadStats())
     setSettings(loadReaderSettings())
+    setTranslationSettings(loadTranslationSettings())
+    setAiSettings(loadAiSettings())
     const newRadio = loadRadioSettings()
     radioEngine.updateSettings(newRadio)
     setRadioSettings(radioEngine.getSettings())
@@ -565,6 +605,13 @@ export default function App() {
                 onOpenRadioStudio={() => navigateToTab('radio')}
                 onJumpToBook={(bid, ch, blk) => handleOpenBook(bid, ch, blk || 0)}
                 onBackToLibrary={navigateBack}
+                translationSettings={translationSettings}
+                onUpdateTranslationSettings={handleUpdateTranslationSettings}
+                onOpenTranslationSettings={() => setShowTranslationSettings(true)}
+                aiSettings={aiSettings}
+                aiConversations={aiConversations}
+                onSaveAiConversations={handleSaveAiConversations}
+                onOpenAiSettings={() => setShowAiSettings(true)}
               />
             )}
 
@@ -587,6 +634,17 @@ export default function App() {
                   setRadioDockVisible(false)
                   navigateBack()
                 }}
+              />
+            )}
+
+            {activeTab === 'ai' && (
+              <AiAssistantPanel
+                variant="page"
+                aiSettings={aiSettings}
+                conversations={aiConversations}
+                onSaveConversations={handleSaveAiConversations}
+                onOpenAiSettings={() => setShowAiSettings(true)}
+                onOpenTranslationSettings={() => setShowTranslationSettings(true)}
               />
             )}
 
@@ -621,16 +679,17 @@ export default function App() {
         )}
       </main>
 
-      {/* 移动端底部导航栏（黄金 3 入口：书馆 / 电台 / 笔记，点击书籍直达沉浸阅读） */}
+      {/* 移动端底部导航栏（4 入口：书馆 / 电台 / AI / 笔记） */}
       {!hideChrome && (
         <nav
-          className="md:hidden shrink-0 border-t safe-bottom grid grid-cols-3 z-30 select-none"
+          className="md:hidden shrink-0 border-t safe-bottom grid grid-cols-4 z-30 select-none"
           style={{ backgroundColor: 'var(--bg-glass)', borderColor: 'var(--border)', backdropFilter: 'blur(20px)' }}
         >
           {(
             [
               ['library', '书馆', <Library className="w-5 h-5" />],
               ['radio', '电台', <Radio className="w-5 h-5" />],
+              ['ai', 'AI', <Sparkles className="w-5 h-5" />],
               ['notes', '笔记', <BookmarkCheck className="w-5 h-5" />],
             ] as const
           ).map(([id, label, icon]) => {
@@ -655,7 +714,7 @@ export default function App() {
                 <span>{label}</span>
                 {id === 'radio' && isRadioPlaying && (
                   <span
-                    className="absolute top-2 right-[32%] w-2 h-2 rounded-full animate-pulse"
+                    className="absolute top-2 right-[28%] w-2 h-2 rounded-full animate-pulse"
                     style={{ backgroundColor: 'var(--accent)' }}
                   />
                 )}
@@ -663,6 +722,26 @@ export default function App() {
             )
           })}
         </nav>
+      )}
+
+      {/* 全局翻译服务与双语配置弹窗 */}
+      {showTranslationSettings && (
+        <TranslationSettingsModal
+          settings={translationSettings}
+          aiSettings={aiSettings}
+          onUpdateSettings={handleUpdateTranslationSettings}
+          onOpenAiSettings={() => setShowAiSettings(true)}
+          onClose={() => setShowTranslationSettings(false)}
+        />
+      )}
+
+      {/* 全局 AI API 接口设置弹窗 */}
+      {showAiSettings && (
+        <AiSettingsModal
+          settings={aiSettings}
+          onUpdateSettings={handleUpdateAiSettings}
+          onClose={() => setShowAiSettings(false)}
+        />
       )}
 
       {/* 全局统一轻盈提示胶囊（顶部居中悬浮，绝不遮挡底部菜单/进度条/软键盘） */}

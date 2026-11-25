@@ -42,7 +42,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import okhttp3.Call
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 
 class MainActivity : AppCompatActivity() {
 
@@ -55,6 +64,15 @@ class MainActivity : AppCompatActivity() {
     private var auditionSystemTtsReady = false
     private var volumeKeyTurnEnabled = false
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
+    private val proxyHttpClient: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(20, TimeUnit.SECONDS)
+            .readTimeout(0, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
+            .followRedirects(true)
+            .build()
+    }
+    private val activeStreamCalls = ConcurrentHashMap<String, Call>()
 
     private val filePickerLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -231,6 +249,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         RadioForegroundService.eventCallback = null
+        activeStreamCalls.values.forEach { runCatching { it.cancel() } }
+        activeStreamCalls.clear()
         auditionPlayer?.release()
         runCatching {
             auditionSystemTts?.stop()
@@ -591,6 +611,162 @@ class MainActivity : AppCompatActivity() {
             } catch (_: Exception) {
                 false
             }
+        }
+
+        @JavascriptInterface
+        fun httpRequest(reqId: String, payloadJson: String) {
+            uiScope.launch(Dispatchers.IO) {
+                val resultObj = JSONObject()
+                try {
+                    val payload = JSONObject(payloadJson)
+                    val targetUrl = payload.optString("url", "")
+                    val method = payload.optString("method", "GET").uppercase(Locale.US)
+                    val headersObj = payload.optJSONObject("headers")
+                    val bodyStr = if (payload.has("body") && !payload.isNull("body")) payload.optString("body", "") else null
+                    val timeoutMs = payload.optLong("timeoutMs", 30000L).coerceIn(3000L, 120000L)
+
+                    val reqBuilder = Request.Builder().url(targetUrl)
+                    var contentType = "application/json; charset=utf-8"
+                    if (headersObj != null) {
+                        val keys = headersObj.keys()
+                        while (keys.hasNext()) {
+                            val k = keys.next()
+                            val v = headersObj.optString(k, "")
+                            if (k.equals("content-type", ignoreCase = true) && v.isNotBlank()) {
+                                contentType = v
+                            }
+                            reqBuilder.header(k, v)
+                        }
+                    }
+
+                    if (method != "GET" && method != "HEAD") {
+                        val reqBody = (bodyStr ?: "").toRequestBody(contentType.toMediaTypeOrNull())
+                        reqBuilder.method(method, reqBody)
+                    } else {
+                        reqBuilder.method(method, null)
+                    }
+
+                    val client = proxyHttpClient.newBuilder()
+                        .callTimeout(timeoutMs, TimeUnit.MILLISECONDS)
+                        .build()
+
+                    client.newCall(reqBuilder.build()).execute().use { resp ->
+                        val respText = resp.body?.string() ?: ""
+                        val respHeaders = JSONObject()
+                        for (name in resp.headers.names()) {
+                            respHeaders.put(name.lowercase(Locale.US), resp.header(name) ?: "")
+                        }
+                        val cookiesStr = resp.headers("Set-Cookie")
+                            .mapNotNull { it.substringBefore(';').trim().takeIf { p -> p.isNotEmpty() } }
+                            .joinToString("; ")
+                        resultObj.put("ok", resp.isSuccessful)
+                        resultObj.put("status", resp.code)
+                        resultObj.put("statusText", resp.message)
+                        resultObj.put("finalUrl", resp.request.url.toString())
+                        resultObj.put("cookies", cookiesStr)
+                        resultObj.put("headers", respHeaders)
+                        resultObj.put("body", respText)
+                    }
+                } catch (e: Exception) {
+                    resultObj.put("ok", false)
+                    resultObj.put("status", 0)
+                    resultObj.put("error", e.message ?: e.javaClass.simpleName)
+                }
+
+                val idEscaped = JSONObject.quote(reqId)
+                val resEscaped = JSONObject.quote(resultObj.toString())
+                runOnUiThread {
+                    runCatching {
+                        webView.evaluateJavascript(
+                            "window.__onAndroidHttpResponse && window.__onAndroidHttpResponse($idEscaped, JSON.parse($resEscaped));",
+                            null
+                        )
+                    }
+                }
+            }
+        }
+
+        @JavascriptInterface
+        fun httpStreamStart(reqId: String, payloadJson: String) {
+            uiScope.launch(Dispatchers.IO) {
+                fun emit(eventType: String, data: String) {
+                    val idEscaped = JSONObject.quote(reqId)
+                    val evEscaped = JSONObject.quote(eventType)
+                    val dataEscaped = JSONObject.quote(data)
+                    runOnUiThread {
+                        runCatching {
+                            webView.evaluateJavascript(
+                                "window.__onAndroidHttpStream && window.__onAndroidHttpStream($idEscaped, $evEscaped, $dataEscaped);",
+                                null
+                            )
+                        }
+                    }
+                }
+
+                try {
+                    val payload = JSONObject(payloadJson)
+                    val targetUrl = payload.optString("url", "")
+                    val method = payload.optString("method", "POST").uppercase(Locale.US)
+                    val headersObj = payload.optJSONObject("headers")
+                    val bodyStr = if (payload.has("body") && !payload.isNull("body")) payload.optString("body", "") else ""
+
+                    val reqBuilder = Request.Builder().url(targetUrl)
+                    var contentType = "application/json; charset=utf-8"
+                    if (headersObj != null) {
+                        val keys = headersObj.keys()
+                        while (keys.hasNext()) {
+                            val k = keys.next()
+                            val v = headersObj.optString(k, "")
+                            if (k.equals("content-type", ignoreCase = true) && v.isNotBlank()) {
+                                contentType = v
+                            }
+                            reqBuilder.header(k, v)
+                        }
+                    }
+
+                    if (method != "GET" && method != "HEAD") {
+                        reqBuilder.method(method, bodyStr.toRequestBody(contentType.toMediaTypeOrNull()))
+                    } else {
+                        reqBuilder.method(method, null)
+                    }
+
+                    val call = proxyHttpClient.newCall(reqBuilder.build())
+                    activeStreamCalls[reqId] = call
+                    call.execute().use { resp ->
+                        if (!resp.isSuccessful) {
+                            val errText = resp.body?.string() ?: "HTTP ${resp.code}"
+                            emit("error", "HTTP ${resp.code}: $errText")
+                            return@launch
+                        }
+                        val stream = resp.body?.byteStream()
+                        if (stream == null) {
+                            emit("done", "")
+                            return@launch
+                        }
+                        BufferedReader(InputStreamReader(stream, Charsets.UTF_8)).use { reader ->
+                            while (true) {
+                                val line = reader.readLine() ?: break
+                                emit("chunk", line + "\n")
+                            }
+                        }
+                        emit("done", "")
+                    }
+                } catch (e: Exception) {
+                    if (activeStreamCalls.containsKey(reqId)) {
+                        emit("error", e.message ?: "流式连接中断")
+                    } else {
+                        emit("done", "")
+                    }
+                } finally {
+                    activeStreamCalls.remove(reqId)
+                }
+            }
+        }
+
+        @JavascriptInterface
+        fun httpStreamAbort(reqId: String) {
+            val call = activeStreamCalls.remove(reqId)
+            runCatching { call?.cancel() }
         }
     }
 }

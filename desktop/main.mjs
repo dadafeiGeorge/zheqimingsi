@@ -173,10 +173,139 @@ function startLocalServer(webDir, libraryDir, cacheDir, onRevealWindow) {
 
       res.setHeader('Access-Control-Allow-Origin', '*')
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
       if (req.method === 'OPTIONS') {
         res.writeHead(204)
         res.end()
+        return
+      }
+
+      // 通用外部 HTTP 代理（彻底规避翻译引擎与 AI API 的 CORS 跨域限制）
+      if (pathname === '/api/proxy/http' && req.method === 'POST') {
+        const chunks = []
+        for await (const c of req) chunks.push(c)
+        const payload = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}')
+        const targetUrl = String(payload.url || '')
+        if (!/^https?:\/\//i.test(targetUrl)) {
+          const errBody = Buffer.from(JSON.stringify({ ok: false, status: 400, error: '无效的目标 URL' }), 'utf8')
+          res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8', 'Content-Length': errBody.length })
+          res.end(errBody)
+          return
+        }
+        const method = String(payload.method || 'GET').toUpperCase()
+        const reqHeaders = payload.headers && typeof payload.headers === 'object' ? { ...payload.headers } : {}
+        const timeoutMs = Math.min(120000, Math.max(3000, Number(payload.timeoutMs) || 30000))
+        const ac = new AbortController()
+        const timer = setTimeout(() => ac.abort(), timeoutMs)
+        try {
+          const upstream = await fetch(targetUrl, {
+            method,
+            headers: reqHeaders,
+            body: method === 'GET' || method === 'HEAD' ? undefined : payload.body ?? undefined,
+            signal: ac.signal,
+          })
+          const text = await upstream.text()
+          const respHeaders = {}
+          upstream.headers.forEach((v, k) => {
+            respHeaders[k] = v
+          })
+          const setCookies =
+            typeof upstream.headers.getSetCookie === 'function'
+              ? upstream.headers.getSetCookie()
+              : respHeaders['set-cookie']
+              ? [respHeaders['set-cookie']]
+              : []
+          const cookies = setCookies
+            .map((c) => String(c).split(';')[0].trim())
+            .filter(Boolean)
+            .join('; ')
+          const out = Buffer.from(
+            JSON.stringify({
+              ok: upstream.ok,
+              status: upstream.status,
+              statusText: upstream.statusText,
+              finalUrl: upstream.url || targetUrl,
+              cookies,
+              headers: respHeaders,
+              body: text,
+            }),
+            'utf8'
+          )
+          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Content-Length': out.length })
+          res.end(out)
+        } catch (err) {
+          const out = Buffer.from(
+            JSON.stringify({
+              ok: false,
+              status: 0,
+              error: err?.name === 'AbortError' ? '请求超时，请检查网络或代理设置' : String(err?.message || err),
+            }),
+            'utf8'
+          )
+          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Content-Length': out.length })
+          res.end(out)
+        } finally {
+          clearTimeout(timer)
+        }
+        return
+      }
+
+      // 通用流式代理（专供 AI API 实时 SSE 流式回复）
+      if (pathname === '/api/proxy/stream' && req.method === 'POST') {
+        const chunks = []
+        for await (const c of req) chunks.push(c)
+        const payload = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}')
+        const targetUrl = String(payload.url || '')
+        if (!/^https?:\/\//i.test(targetUrl)) {
+          res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' })
+          res.end('无效的目标 URL')
+          return
+        }
+        const method = String(payload.method || 'POST').toUpperCase()
+        const reqHeaders = payload.headers && typeof payload.headers === 'object' ? { ...payload.headers } : {}
+        const ac = new AbortController()
+        req.on('close', () => {
+          try {
+            ac.abort()
+          } catch {}
+        })
+        try {
+          const upstream = await fetch(targetUrl, {
+            method,
+            headers: reqHeaders,
+            body: method === 'GET' || method === 'HEAD' ? undefined : payload.body ?? undefined,
+            signal: ac.signal,
+          })
+          const ct = upstream.headers.get('content-type') || 'text/event-stream; charset=utf-8'
+          res.writeHead(upstream.status, {
+            'Content-Type': ct,
+            'Cache-Control': 'no-cache, no-transform',
+            Connection: 'keep-alive',
+          })
+          if (!upstream.body) {
+            res.end()
+            return
+          }
+          const reader = upstream.body.getReader()
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+            if (value && value.length > 0) {
+              res.write(Buffer.from(value))
+            }
+          }
+          res.end()
+        } catch (err) {
+          if (!res.headersSent) {
+            const msg = Buffer.from(String(err?.message || err), 'utf8')
+            res.writeHead(502, { 'Content-Type': 'text/plain; charset=utf-8', 'Content-Length': msg.length })
+            res.end(msg)
+          } else {
+            try {
+              res.end()
+            } catch {}
+          }
+        }
         return
       }
 

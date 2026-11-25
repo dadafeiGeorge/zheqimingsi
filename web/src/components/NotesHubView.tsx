@@ -296,7 +296,7 @@ export const NotesHubView: React.FC<NotesHubViewProps> = ({
                   className="p-4 rounded-2xl border space-y-2.5"
                   style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border)' }}
                 >
-                  <p className={`font-serif text-sm leading-relaxed hl-${h.color} inline whitespace-pre-line`}>{h.text}</p>
+                  <p className={`font-serif text-sm leading-relaxed hl-${h.color} ${h.style === 'underline' ? 'hl-style-underline' : 'hl-style-highlight'} inline whitespace-pre-line`}>{h.text}</p>
                   {h.note && (
                     <div
                       className="text-xs px-3 py-2 rounded-lg"

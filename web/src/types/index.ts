@@ -1,9 +1,80 @@
 export type ThemeId = 'paper' | 'sepia' | 'night' | 'sage'
 export type FontFamilyId = 'serif' | 'sans' | 'kai'
 export type ReadMode = 'scroll' | 'page'
-export type HighlightColor = 'amber' | 'rose' | 'emerald' | 'indigo'
+export type HighlightColor = 'sky' | 'rose' | 'emerald' | 'indigo' | 'amber'
+export type HighlightStyle = 'highlight' | 'underline'
 export type AmbientSoundId = 'none' | 'rain' | 'fireplace' | 'brown' | 'vinyl'
-export type AppTab = 'library' | 'reader' | 'radio' | 'notes'
+export type AppTab = 'library' | 'reader' | 'radio' | 'ai' | 'notes'
+
+export type TranslationEngineId =
+  | 'bing_web'
+  | 'google_web'
+  | 'azure_api'
+  | 'google_api'
+  | 'deepl_api'
+  | 'ai'
+  | 'offline'
+
+export interface TranslationSettings {
+  activeEngine: TranslationEngineId
+  sourceLang: string
+  targetLang: string
+  fullTextEnabled: boolean
+  azureKey: string
+  azureRegion: string
+  azureEndpoint: string
+  googleApiKey: string
+  deeplApiKey: string
+  deeplPlan: 'free' | 'pro'
+  offlineLocalUrl: string
+  offlineUseLocalServer: boolean
+}
+
+export type AiProtocol = 'openai' | 'anthropic' | 'gemini'
+
+export type AiProviderPresetId =
+  | 'deepseek'
+  | 'openai'
+  | 'siliconflow'
+  | 'gemini'
+  | 'anthropic'
+  | 'openrouter'
+  | 'ollama'
+  | 'custom'
+
+export interface AiSettings {
+  preset: AiProviderPresetId
+  protocol: AiProtocol
+  baseUrl: string
+  apiKey: string
+  model: string
+  systemPrompt: string
+  temperature: number
+  /** 0 或未开启自定义上限时表示无上限（不传 max_tokens，完全跟随模型原生最大输出） */
+  maxTokens: number
+  /** 默认 true：不限制 AI 输出 Token 上限 */
+  unlimitedOutput?: boolean
+}
+
+export interface AiMessage {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  quoteText?: string
+  bookTitle?: string
+  chapterTitle?: string
+  createdAt: number
+}
+
+export interface AiConversation {
+  id: string
+  title: string
+  bookId?: string
+  bookTitle?: string
+  chapterTitle?: string
+  messages: AiMessage[]
+  updatedAt: number
+}
 
 export interface BookCatalogItem {
   id: string
@@ -108,6 +179,7 @@ export interface HighlightItem {
   text: string
   note: string
   color: HighlightColor
+  style?: HighlightStyle
   createdAt: number
 }
 

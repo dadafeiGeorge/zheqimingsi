@@ -250,33 +250,94 @@ body,
   transition: background-color 0.35s ease, box-shadow 0.35s ease;
 }
 
-/* 用户手动选中划线与批注样式 */
+/* 用户手动选中划线与批注样式（支持 5 色 × 荧光高亮 / 精致下划线双样式） */
 .user-hl {
   background: transparent;
   color: inherit;
   border-radius: 3px;
   padding: 0 1px;
   cursor: pointer;
-  transition: filter 0.15s ease;
+  transition: filter 0.15s ease, background-color 0.15s ease;
 }
 .user-hl:hover {
-  filter: brightness(0.95);
+  filter: brightness(0.94);
 }
-.hl-amber {
-  background-color: rgba(234, 179, 8, 0.2);
-  border-bottom: 2px solid rgba(217, 155, 16, 0.85);
+
+/* 天蓝 Sky */
+.hl-sky,
+.hl-sky.hl-style-highlight {
+  background-color: rgba(56, 189, 248, 0.25);
+  border-bottom: 1.5px solid rgba(14, 165, 233, 0.45);
 }
-.hl-rose {
-  background-color: rgba(225, 29, 72, 0.15);
-  border-bottom: 2px solid rgba(225, 29, 72, 0.78);
+.hl-sky.hl-style-underline {
+  background-color: transparent;
+  border-bottom: 2px solid #38bdf8;
+  border-radius: 0;
+  padding-bottom: 1px;
 }
-.hl-emerald {
-  background-color: rgba(16, 185, 129, 0.18);
-  border-bottom: 2px solid rgba(16, 185, 129, 0.82);
+
+/* 茱萸 Rose */
+.hl-rose,
+.hl-rose.hl-style-highlight {
+  background-color: rgba(244, 63, 94, 0.2);
+  border-bottom: 1.5px solid rgba(225, 29, 72, 0.45);
 }
-.hl-indigo {
-  background-color: rgba(79, 70, 229, 0.16);
-  border-bottom: 2px solid rgba(79, 70, 229, 0.78);
+.hl-rose.hl-style-underline {
+  background-color: transparent;
+  border-bottom: 2px solid #f43f5e;
+  border-radius: 0;
+  padding-bottom: 1px;
+}
+
+/* 翠竹 Emerald */
+.hl-emerald,
+.hl-emerald.hl-style-highlight {
+  background-color: rgba(34, 197, 94, 0.22);
+  border-bottom: 1.5px solid rgba(22, 163, 74, 0.45);
+}
+.hl-emerald.hl-style-underline {
+  background-color: transparent;
+  border-bottom: 2px solid #22c55e;
+  border-radius: 0;
+  padding-bottom: 1px;
+}
+
+/* 紫罗兰 Indigo/Violet */
+.hl-indigo,
+.hl-indigo.hl-style-highlight {
+  background-color: rgba(168, 85, 247, 0.22);
+  border-bottom: 1.5px solid rgba(147, 51, 234, 0.45);
+}
+.hl-indigo.hl-style-underline {
+  background-color: transparent;
+  border-bottom: 2px solid #a855f7;
+  border-radius: 0;
+  padding-bottom: 1px;
+}
+
+/* 琥珀 Amber */
+.hl-amber,
+.hl-amber.hl-style-highlight {
+  background-color: rgba(234, 179, 8, 0.26);
+  border-bottom: 1.5px solid rgba(217, 155, 16, 0.5);
+}
+.hl-amber.hl-style-underline {
+  background-color: transparent;
+  border-bottom: 2px solid #eab308;
+  border-radius: 0;
+  padding-bottom: 1px;
+}
+
+/* 阅读器全文双语平行译文块 */
+.bilingual-para-box {
+  margin-top: 0.45rem;
+  padding: 0.45rem 0.75rem;
+  border-left: 2.5px solid var(--accent);
+  background-color: var(--bg-elevated);
+  border-radius: 0 10px 10px 0;
+  font-size: 0.88em;
+  line-height: 1.7;
+  color: var(--text-secondary);
 }
 .user-hl-note-dot {
   display: inline-flex;

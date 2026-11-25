@@ -24,7 +24,7 @@
         android:label="哲启明思"
         android:supportsRtl="true"
         android:theme="@style/Theme.LumenReader"
-        android:usesCleartextTraffic="false">
+        android:usesCleartextTraffic="true">
 
         <activity
             android:name=".MainActivity"

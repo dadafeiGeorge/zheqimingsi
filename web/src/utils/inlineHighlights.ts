@@ -738,7 +738,8 @@ export function applyInlineHighlightsToHtml(
       if (before) frag.appendChild(document.createTextNode(before))
 
       const mark = document.createElement('mark')
-      mark.className = `user-hl hl-${item.color}`
+      const styleClass = item.style === 'underline' ? 'hl-style-underline' : 'hl-style-highlight'
+      mark.className = `user-hl hl-${item.color} ${styleClass}`
       mark.setAttribute('data-hl-id', item.id)
       mark.textContent = mid
       frag.appendChild(mark)

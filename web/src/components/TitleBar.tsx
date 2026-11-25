@@ -8,6 +8,7 @@ import {
   Minimize2,
   Minus,
   Radio,
+  Sparkles,
   X,
 } from 'lucide-react'
 import type { AppTab, ThemeId } from '../types'
@@ -73,12 +74,13 @@ export const TitleBar: React.FC<TitleBarProps> = ({
     { id: 'library', label: '典藏书馆', icon: <Library className="w-4 h-4" /> },
     { id: 'reader', label: '沉浸阅读', icon: <BookOpen className="w-4 h-4" /> },
     { id: 'radio', label: '哲思电台', icon: <Radio className="w-4 h-4" />, badge: isRadioPlaying },
+    { id: 'ai', label: 'AI 助手', icon: <Sparkles className="w-4 h-4" /> },
     { id: 'notes', label: '笔记足迹', icon: <BookmarkCheck className="w-4 h-4" /> },
   ]
 
   return (
     <header
-      className="safe-top shrink-0 z-30 border-b titlebar-drag select-none"
+      className="safe-top relative shrink-0 z-40 border-b titlebar-drag select-none"
       style={{
         backgroundColor: 'var(--bg-glass)',
         borderColor: 'var(--border)',

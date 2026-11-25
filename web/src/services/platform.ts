@@ -49,11 +49,250 @@ declare global {
       ttsGetSystemEngineName?: () => string
       saveImageBase64: (base64Png: string, fileName: string) => boolean
       showToast: (msg: string) => void
+      httpRequest?: (reqId: string, payloadJson: string) => void
+      httpStreamStart?: (reqId: string, payloadJson: string) => void
+      httpStreamAbort?: (reqId: string) => void
     }
     __onAndroidRadioEvent?: (event: any) => void
     __onAndroidVoicesResult?: (voicesJson: string) => void
     __onAndroidVolumeKey?: (dir: 'up' | 'down') => void
     __handleAndroidBack?: () => 'consumed' | 'exit_background' | 'exit'
+    __onAndroidHttpResponse?: (reqId: string, result: NativeHttpResponse) => void
+    __onAndroidHttpStream?: (reqId: string, eventType: 'chunk' | 'done' | 'error', data: string) => void
+  }
+}
+
+export interface NativeHttpRequestOptions {
+  url: string
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE'
+  headers?: Record<string, string>
+  body?: string
+  timeoutMs?: number
+}
+
+export interface NativeHttpResponse {
+  ok: boolean
+  status: number
+  statusText?: string
+  finalUrl?: string
+  cookies?: string
+  headers?: Record<string, string>
+  body: string
+  error?: string
+}
+
+const androidHttpPending = new Map<string, (res: NativeHttpResponse) => void>()
+const androidStreamHandlers = new Map<
+  string,
+  { onChunk: (text: string) => void; onDone: () => void; onError: (msg: string) => void }
+>()
+
+let httpSeq = 0
+
+function ensureAndroidHttpCallbacks() {
+  if (typeof window === 'undefined') return
+  if (!window.__onAndroidHttpResponse) {
+    window.__onAndroidHttpResponse = (reqId, result) => {
+      const resolver = androidHttpPending.get(reqId)
+      if (resolver) {
+        androidHttpPending.delete(reqId)
+        resolver(result)
+      }
+    }
+  }
+  if (!window.__onAndroidHttpStream) {
+    window.__onAndroidHttpStream = (reqId, eventType, data) => {
+      const handler = androidStreamHandlers.get(reqId)
+      if (!handler) return
+      if (eventType === 'chunk') {
+        handler.onChunk(data)
+      } else if (eventType === 'done') {
+        androidStreamHandlers.delete(reqId)
+        handler.onDone()
+      } else if (eventType === 'error') {
+        androidStreamHandlers.delete(reqId)
+        handler.onError(data || '流式请求失败')
+      }
+    }
+  }
+}
+
+/**
+ * 跨端免 CORS 网络请求：
+ * - Windows 桌面端自动经 Electron 本地代理转发
+ * - Android APK 自动经原生 OkHttp3 转发（兼容系统代理/VPN）
+ * - 浏览器端直接 fetch 兜底
+ */
+export async function nativeHttpRequest(opts: NativeHttpRequestOptions): Promise<NativeHttpResponse> {
+  const platform = getPlatform()
+
+  if (platform === 'electron' && window.electronAPI?.apiBase) {
+    try {
+      const res = await fetch(`${window.electronAPI.apiBase}/api/proxy/http`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(opts),
+      })
+      const data = await res.json()
+      return {
+        ok: Boolean(data.ok),
+        status: Number(data.status) || 0,
+        statusText: data.statusText || '',
+        finalUrl: typeof data.finalUrl === 'string' ? data.finalUrl : undefined,
+        cookies: typeof data.cookies === 'string' ? data.cookies : undefined,
+        headers: data.headers || {},
+        body: typeof data.body === 'string' ? data.body : '',
+        error: data.error,
+      }
+    } catch (err: any) {
+      return { ok: false, status: 0, body: '', error: err?.message || '桌面代理请求失败' }
+    }
+  }
+
+  if (platform === 'android' && window.AndroidBridge?.httpRequest) {
+    ensureAndroidHttpCallbacks()
+    const reqId = `http_${Date.now().toString(36)}_${++httpSeq}`
+    const timeoutMs = opts.timeoutMs || 30000
+    return new Promise<NativeHttpResponse>((resolve) => {
+      const timer = window.setTimeout(() => {
+        if (androidHttpPending.has(reqId)) {
+          androidHttpPending.delete(reqId)
+          resolve({ ok: false, status: 0, body: '', error: '请求超时，请检查网络连接' })
+        }
+      }, timeoutMs + 3000)
+      androidHttpPending.set(reqId, (res) => {
+        window.clearTimeout(timer)
+        resolve(res)
+      })
+      try {
+        window.AndroidBridge!.httpRequest!(reqId, JSON.stringify(opts))
+      } catch (err: any) {
+        window.clearTimeout(timer)
+        androidHttpPending.delete(reqId)
+        resolve({ ok: false, status: 0, body: '', error: err?.message || 'Android 原生请求桥调用失败' })
+      }
+    })
+  }
+
+  const ac = new AbortController()
+  const timer = window.setTimeout(() => ac.abort(), opts.timeoutMs || 30000)
+  try {
+    const res = await fetch(opts.url, {
+      method: opts.method || 'GET',
+      headers: opts.headers,
+      body: opts.method === 'GET' ? undefined : opts.body,
+      signal: ac.signal,
+    })
+    const body = await res.text()
+    const headers: Record<string, string> = {}
+    res.headers.forEach((v, k) => {
+      headers[k] = v
+    })
+    return { ok: res.ok, status: res.status, statusText: res.statusText, headers, body }
+  } catch (err: any) {
+    return {
+      ok: false,
+      status: 0,
+      body: '',
+      error: err?.name === 'AbortError' ? '请求超时' : err?.message || '网络请求失败',
+    }
+  } finally {
+    window.clearTimeout(timer)
+  }
+}
+
+/**
+ * 跨端免 CORS 流式网络请求（专供 AI 实时流式生成）
+ */
+export async function nativeHttpStream(
+  opts: NativeHttpRequestOptions,
+  callbacks: {
+    onChunk: (text: string) => void
+    signal?: AbortSignal
+  }
+): Promise<void> {
+  const platform = getPlatform()
+
+  if (platform === 'android' && window.AndroidBridge?.httpStreamStart) {
+    ensureAndroidHttpCallbacks()
+    const reqId = `stream_${Date.now().toString(36)}_${++httpSeq}`
+    return new Promise<void>((resolve, reject) => {
+      const onAbort = () => {
+        androidStreamHandlers.delete(reqId)
+        try {
+          window.AndroidBridge?.httpStreamAbort?.(reqId)
+        } catch {}
+        resolve()
+      }
+      if (callbacks.signal?.aborted) {
+        resolve()
+        return
+      }
+      callbacks.signal?.addEventListener('abort', onAbort, { once: true })
+      androidStreamHandlers.set(reqId, {
+        onChunk: callbacks.onChunk,
+        onDone: () => {
+          callbacks.signal?.removeEventListener('abort', onAbort)
+          resolve()
+        },
+        onError: (msg) => {
+          callbacks.signal?.removeEventListener('abort', onAbort)
+          reject(new Error(msg))
+        },
+      })
+      try {
+        window.AndroidBridge!.httpStreamStart!(reqId, JSON.stringify(opts))
+      } catch (err: any) {
+        androidStreamHandlers.delete(reqId)
+        callbacks.signal?.removeEventListener('abort', onAbort)
+        reject(new Error(err?.message || 'Android 流式通道启动失败'))
+      }
+    })
+  }
+
+  const targetUrl =
+    platform === 'electron' && window.electronAPI?.apiBase
+      ? `${window.electronAPI.apiBase}/api/proxy/stream`
+      : opts.url
+  const fetchInit: RequestInit =
+    platform === 'electron' && window.electronAPI?.apiBase
+      ? {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(opts),
+          signal: callbacks.signal,
+        }
+      : {
+          method: opts.method || 'POST',
+          headers: opts.headers,
+          body: opts.body,
+          signal: callbacks.signal,
+        }
+
+  const res = await fetch(targetUrl, fetchInit)
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '')
+    throw new Error(`HTTP ${res.status}${errText ? `: ${errText.slice(0, 260)}` : ''}`)
+  }
+  if (!res.body) {
+    const text = await res.text()
+    if (text) callbacks.onChunk(text)
+    return
+  }
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder('utf-8')
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      const str = decoder.decode(value, { stream: true })
+      if (str) callbacks.onChunk(str)
+    }
+    const rest = decoder.decode()
+    if (rest) callbacks.onChunk(rest)
+  } catch (err: any) {
+    if (err?.name === 'AbortError') return
+    throw err
   }
 }
 

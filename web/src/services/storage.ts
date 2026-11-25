@@ -1,15 +1,19 @@
 import type {
+  AiConversation,
+  AiSettings,
   BookCatalogItem,
   BookMeta,
   BookmarkItem,
   ChapterContent,
   HighlightItem,
+  HighlightStyle,
   RadioCheckpoint,
   RadioQueueItem,
   RadioSettings,
   ReaderSettings,
   ReadingProgress,
   StudyStats,
+  TranslationSettings,
 } from '../types'
 
 const KEYS = {
@@ -24,6 +28,40 @@ const KEYS = {
   stats: 'lumen_study_stats_v1',
   favorites: 'lumen_favorite_books_v1',
   customBooksMeta: 'lumen_custom_books_meta_v1',
+  translationSettings: 'lumen_translation_settings_v1',
+  aiSettings: 'lumen_ai_settings_v1',
+  aiConversations: 'lumen_ai_conversations_v1',
+  highlightStylePref: 'lumen_highlight_style_pref_v1',
+}
+
+export const DEFAULT_TRANSLATION_SETTINGS: TranslationSettings = {
+  activeEngine: 'bing_web',
+  sourceLang: 'auto',
+  targetLang: 'zh-CN',
+  fullTextEnabled: false,
+  azureKey: '',
+  azureRegion: 'eastasia',
+  azureEndpoint: 'https://api.cognitive.microsofttranslator.com',
+  googleApiKey: '',
+  deeplApiKey: '',
+  deeplPlan: 'free',
+  offlineLocalUrl: 'http://127.0.0.1:5000/translate',
+  offlineUseLocalServer: false,
+}
+
+export const DEFAULT_AI_SYSTEM_PROMPT =
+  '你是「哲启明思」内置的哲学与学术精读导师。请结合文本上下文，以严谨、清晰、富有启发性的中文（或按用户要求的其他语言）解答用户关于选中段落、哲学术语、论证结构与思想史脉络的问题。'
+
+export const DEFAULT_AI_SETTINGS: AiSettings = {
+  preset: 'deepseek',
+  protocol: 'openai',
+  baseUrl: 'https://api.deepseek.com/v1',
+  apiKey: '',
+  model: 'deepseek-chat',
+  systemPrompt: DEFAULT_AI_SYSTEM_PROMPT,
+  temperature: 0.7,
+  maxTokens: 0,
+  unlimitedOutput: true,
 }
 
 export const DEFAULT_READER_SETTINGS: ReaderSettings = {
@@ -87,6 +125,41 @@ export function loadRadioSettings(): RadioSettings {
 
 export function saveRadioSettings(s: RadioSettings) {
   localStorage.setItem(KEYS.radioSettings, JSON.stringify(s))
+}
+
+export function loadTranslationSettings(): TranslationSettings {
+  return safeParse(localStorage.getItem(KEYS.translationSettings), DEFAULT_TRANSLATION_SETTINGS)
+}
+
+export function saveTranslationSettings(s: TranslationSettings) {
+  localStorage.setItem(KEYS.translationSettings, JSON.stringify(s))
+}
+
+export function loadAiSettings(): AiSettings {
+  return safeParse(localStorage.getItem(KEYS.aiSettings), DEFAULT_AI_SETTINGS)
+}
+
+export function saveAiSettings(s: AiSettings) {
+  localStorage.setItem(KEYS.aiSettings, JSON.stringify(s))
+}
+
+export function loadAiConversations(): AiConversation[] {
+  return safeParseRaw<AiConversation[]>(localStorage.getItem(KEYS.aiConversations), [])
+}
+
+export function saveAiConversations(list: AiConversation[]) {
+  try {
+    localStorage.setItem(KEYS.aiConversations, JSON.stringify(list.slice(0, 40)))
+  } catch {}
+}
+
+export function loadHighlightStylePref(): HighlightStyle {
+  const raw = localStorage.getItem(KEYS.highlightStylePref)
+  return raw === 'underline' ? 'underline' : 'highlight'
+}
+
+export function saveHighlightStylePref(style: HighlightStyle) {
+  localStorage.setItem(KEYS.highlightStylePref, style)
 }
 
 export function loadRadioCheckpoint(): RadioCheckpoint | null {
@@ -262,6 +335,8 @@ export function exportFullBackupJson(): string {
     exportedAt: new Date().toISOString(),
     readerSettings: loadReaderSettings(),
     radioSettings: loadRadioSettings(),
+    translationSettings: loadTranslationSettings(),
+    aiSettings: loadAiSettings(),
     radioCheckpoint: loadRadioCheckpoint(),
     radioBookProgress: loadAllRadioBookProgress(),
     progress: loadAllProgress(),
@@ -345,6 +420,12 @@ export function importFullBackupJson(rawText: string): {
   }
   if (data.radioSettings && typeof data.radioSettings === 'object') {
     saveRadioSettings({ ...loadRadioSettings(), ...data.radioSettings })
+  }
+  if (data.translationSettings && typeof data.translationSettings === 'object') {
+    saveTranslationSettings({ ...loadTranslationSettings(), ...data.translationSettings })
+  }
+  if (data.aiSettings && typeof data.aiSettings === 'object') {
+    saveAiSettings({ ...loadAiSettings(), ...data.aiSettings })
   }
   if (data.radioBookProgress && typeof data.radioBookProgress === 'object') {
     const cur = loadAllRadioBookProgress()

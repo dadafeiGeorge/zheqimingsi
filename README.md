@@ -4,15 +4,15 @@
 
 # 哲启明思 · PHILO FM
 
-**离线哲学典藏阅读器 & 微软神经网络电台（Windows 桌面端 + Android 移动端）**
+**离线哲学典藏阅读器 & 微软神经网络电台 & AI 哲思伴读翻译（Windows 桌面端 + Android 移动端）**
 
-*把一座彻底离线、随时可听的哲学图书馆，装进电脑与口袋。*
+*把一座彻底离线、随时可听、可译可问的哲学图书馆，装进电脑与口袋。*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-1F6F52.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/dadafeiGeorge/zheqimingsi?color=1F6F52&label=Release)](https://github.com/dadafeiGeorge/zheqimingsi/releases/latest)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Android-DF9B48.svg)](#双端特性一览)
 [![Library](https://img.shields.io/badge/Books-94%20部原典%20%C2%B7%202920%20万字-B4512A.svg)](#离线哲学典藏书库)
-[![Glossary](https://img.shields.io/badge/Glossary-383%20条核心哲学词条-28889A.svg)](#双端特性一览)
+[![AI & Translate](https://img.shields.io/badge/New-AI%20伴读%20%2B%207引擎双语翻译-6F52C8.svg)](#ai-哲思助手与多引擎翻译全新上线)
 
 </div>
 
@@ -24,8 +24,8 @@
 
 | 平台 | 文件名 | 大小 | 说明 |
 | :--- | :--- | :---: | :--- |
-| **Windows x64** | `哲启明思-Windows便携版-新.exe` | ~96.8 MB | 单文件绿色便携，免安装双击即开，全量典籍与字体内置 |
-| **Android 7.0+** | `哲启明思-Android.apk` | ~41.5 MB | 轻量单包离线内置，支持原生后台前台服务与息屏连播 |
+| **Windows x64** | `哲启明思-Windows便携版-新.exe` | ~96.8 MB | 单文件绿色便携，免安装双击即开，全量典籍、字体、AI 伴读与多引擎翻译内置 |
+| **Android 7.0+** | `哲启明思-Android.apk` | ~41.5 MB | 轻量单包离线内置，原生前台电台息屏连播 + 原生网络桥接 AI 伴读与双语翻译 |
 
 ---
 
@@ -33,7 +33,26 @@
 
 **哲启明思（PHILO FM）** 是一款离线优先、面向哲学深度研读与沉浸听书体验的跨端开源应用，同时提供 **Windows 单文件便携桌面端**（Electron）与 **Android 原生增强移动端**（Kotlin + WebView + 原生前台媒体服务）。
 
-它内置 **94 部** 精校哲学原典与学术全书（总计 **2,920 万字**）、**383 条**核心哲学术语词典与高压缩离线宋体/楷体字库，零广告、零云端强依赖、开箱即读；并融合 **9 大主题 FM 哲学电台** 与微软神经网络语音播报，配合深夜雨声、壁炉微火、书房棕噪、黑胶底噪等环境白噪音，让思考在桌面精研与移动通勤之间自然延续。
+它内置 **94 部** 精校哲学原典与学术全书（总计 **2,920 万字**）、**383 条**核心哲学术语词典与高压缩离线宋体/楷体字库，零广告、零云端强依赖、开箱即读；并融合 **9 大主题 FM 哲学电台**、**AI 哲思伴读助手** 与 **7 引擎划词/全文双语平行翻译**，配合深夜雨声、壁炉微火、书房棕噪、黑胶底噪等环境白噪音，让思考在桌面精研与移动通勤之间自然延续。
+
+---
+
+## AI 哲思助手与多引擎翻译（全新上线）
+
+### 🤖 AI 哲思伴读与辅助批注
+- **多协议模型全覆盖**：内置 **DeepSeek、OpenAI、硅基流动 SiliconFlow、Google Gemini、Anthropic Claude、OpenRouter、本地离线 Ollama** 及任意 OpenAI 兼容接口（OneAPI / NewAPI / 阿里云百炼 / 智谱 / Kimi 等）。
+- **原生无跨域流式对话（SSE）**：Windows 端走 Electron 主进程原生流式代理，Android 端走 Kotlin OkHttp 原生流式桥接，彻底规避 CORS 跨域限制，响应实时逐字吐出。
+- **阅读上下文深度联动**：阅读中划选任意段落即可呼出 **AI 伴读抽屉**，内置「深度解读」「翻译并解析」「提炼论点」「批判追问」快捷提示词，支持多会话历史与 Markdown 渲染，回答可一键存为书房笔记。
+- **AI 一键批注草稿**：在划线批注框中点击 AI 辅助，即可基于所选原典段落自动生成学术批注草稿，编辑后直接保存。
+
+### 🌐 7 引擎划词翻译 & 全文双语平行翻译
+- **双模式无缝翻译**：阅读页支持 **划词悬浮即译** 与 **全文双语平行对照翻译**（渐进式小并发翻译、结果自动缓存、切章自动取消，防限流不卡顿）。
+- **7 大引擎自由切换**：
+  - **在线免密钥即用**：Bing 网页翻译（国内通常直连）、Google 网页翻译
+  - **专业官方 API**：Microsoft Azure API、Google Cloud Translation v2 API、DeepL API（Free / Pro，德/法/英学术翻译品质出色）
+  - **AI 哲学学术翻译**：调用已配置的大模型进行上下文感知哲学精译
+  - **内置零依赖离线翻译引擎**：融合 383+ 跨书德/法/英/希/拉哲学术语辞典 + 高频人文短语与形态还原，断网/飞行模式照常即译，并可选接本地 LibreTranslate 等自建服务自动回退。
+- **11 种语言互译**：支持自动检测及简/繁中文、英、法、德、日、韩、俄、西、意、希腊语，设置面板提供延迟测速与一键联调测试。
 
 ---
 
@@ -109,11 +128,11 @@
 .
 ├── web/                # 前端核心应用（React 18 + TypeScript + Vite + Tailwind CSS）
 │   └── src/
-│       ├── components/ # LibraryView / ReaderView / RadioStudioView / NotesHubView / QuoteCardModal
-│       ├── services/   # libraryApi / radioEngine / ambientAudio / storage / platform
+│       ├── components/ # LibraryView / ReaderView / RadioStudioView / NotesHubView / AiAssistantPanel / SettingsModals
+│       ├── services/   # libraryApi / radioEngine / ambientAudio / aiService / translateService / offlineTranslator
 │       └── assets/     # 内置离线字体 LumenSerif & LumenKai (.woff2)
-├── desktop/            # Windows 桌面端（Electron 32 无边框窗口 + 本地静态服务 + 微软 TTS 代理 + 托盘/媒体键）
-├── android/            # Android 客户端（Kotlin + WebViewAssetLoader + RadioForegroundService 原生前台电台）
+├── desktop/            # Windows 桌面端（Electron 32 无边框窗口 + 本地静态服务 + TTS/AI 原生流式代理 + 托盘/媒体键）
+├── android/            # Android 客户端（Kotlin + WebViewAssetLoader + OkHttp 原生流式桥接 + RadioForegroundService）
 ├── library-data/       # 结构化离线哲学典藏书库（catalog / glossary-index / search-index / 94 部书籍分片）
 ├── scripts/            # 书库构建、校对、脚注折叠与图标生成脚本
 └── docs/screenshots/   # 项目展示截图
