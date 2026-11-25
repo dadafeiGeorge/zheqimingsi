@@ -1,0 +1,45 @@
+# Dependencies & Build Outputs
+node_modules/
+**/node_modules/
+web/dist/
+dist-releases/
+
+# Android Build & Generated Assets (rebuilt from web/dist + library-data)
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/app/src/main/assets/web/
+*.apk
+*.aab
+*.keystore
+*.jks
+
+# Desktop Packaging Artifacts
+desktop/dist/
+desktop/out/
+*.exe
+
+# Local Working / Preprocessing / Video Directories
+audit-work/
+extra-books/
+new-books/
+polish-work-*/
+translation-work/
+translation-work-*/
+promo-video/
+mojuan-promo/
+
+# Python / OS / IDE
+**/__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.env.*
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.log

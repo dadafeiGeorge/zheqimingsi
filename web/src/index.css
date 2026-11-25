@@ -1,0 +1,406 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 内置高压缩离线中文字体子集（覆盖全库 94 部典籍 + GB2312 常用字），彻底解决 Android APK 无宋体/楷体导致字体切换失效问题 */
+@font-face {
+  font-family: 'LumenSerif';
+  src: url('./assets/fonts/lumen-serif-regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'LumenSerif';
+  src: url('./assets/fonts/lumen-serif-bold.woff2') format('woff2');
+  font-weight: 600 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'LumenKai';
+  src: url('./assets/fonts/lumen-kai-regular.woff2') format('woff2');
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root,
+[data-theme='paper'] {
+  --bg: #f7f3eb;
+  --bg-elevated: #efe9dc;
+  --bg-card: #fcfaf5;
+  --bg-glass: rgba(247, 243, 235, 0.86);
+  --border: rgba(58, 47, 36, 0.11);
+  --border-strong: rgba(58, 47, 36, 0.22);
+  --text: #231f1b;
+  --text-secondary: #685f55;
+  --text-muted: #968c80;
+  --accent: #b4512a;
+  --accent-soft: rgba(180, 81, 42, 0.12);
+  --gold: #c68a30;
+  --tts-active-bg: rgba(180, 81, 42, 0.09);
+  --tts-active-border: #b4512a;
+  --shadow-soft: 0 8px 30px rgba(42, 31, 18, 0.07);
+  --shadow-float: 0 18px 48px rgba(42, 31, 18, 0.14);
+}
+
+[data-theme='sepia'] {
+  --bg: #ece1cb;
+  --bg-elevated: #e2d4b8;
+  --bg-card: #f3ead8;
+  --bg-glass: rgba(236, 225, 203, 0.88);
+  --border: rgba(68, 49, 27, 0.13);
+  --border-strong: rgba(68, 49, 27, 0.25);
+  --text: #2c2319;
+  --text-secondary: #675744;
+  --text-muted: #8f7c65;
+  --accent: #9e4321;
+  --accent-soft: rgba(158, 67, 33, 0.13);
+  --gold: #b47824;
+  --tts-active-bg: rgba(158, 67, 33, 0.11);
+  --tts-active-border: #9e4321;
+  --shadow-soft: 0 8px 30px rgba(56, 39, 18, 0.09);
+  --shadow-float: 0 18px 48px rgba(56, 39, 18, 0.16);
+}
+
+[data-theme='night'] {
+  --bg: #121418;
+  --bg-elevated: #1a1d24;
+  --bg-card: #1d2129;
+  --bg-glass: rgba(20, 23, 29, 0.88);
+  --border: rgba(235, 226, 210, 0.09);
+  --border-strong: rgba(235, 226, 210, 0.18);
+  --text: #e5dfd3;
+  --text-secondary: #9fa4b0;
+  --text-muted: #6c7280;
+  --accent: #df9b48;
+  --accent-soft: rgba(223, 155, 72, 0.15);
+  --gold: #eab35c;
+  --tts-active-bg: rgba(223, 155, 72, 0.13);
+  --tts-active-border: #df9b48;
+  --shadow-soft: 0 10px 34px rgba(0, 0, 0, 0.36);
+  --shadow-float: 0 20px 56px rgba(0, 0, 0, 0.56);
+}
+
+[data-theme='sage'] {
+  --bg: #cddcd1;
+  --bg-elevated: #bfd1c4;
+  --bg-card: #d9e6dc;
+  --bg-glass: rgba(205, 220, 209, 0.9);
+  --border: rgba(20, 44, 31, 0.14);
+  --border-strong: rgba(20, 44, 31, 0.25);
+  --text: #15241c;
+  --text-secondary: #395244;
+  --text-muted: #587264;
+  --accent: #1d634a;
+  --accent-soft: rgba(29, 99, 74, 0.14);
+  --gold: #8c6f24;
+  --tts-active-bg: rgba(29, 99, 74, 0.13);
+  --tts-active-border: #1d634a;
+  --shadow-soft: 0 8px 30px rgba(16, 38, 26, 0.1);
+  --shadow-float: 0 18px 48px rgba(16, 38, 26, 0.18);
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: "PingFang SC", "Microsoft YaHei UI", "Hiragino Sans GB", system-ui, -apple-system, sans-serif;
+  transition: background-color 0.28s ease, color 0.28s ease;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Electron 自定义标题栏拖拽 */
+.titlebar-drag {
+  -webkit-app-region: drag;
+}
+.titlebar-no-drag {
+  -webkit-app-region: no-drag;
+}
+
+/* 优雅自定义滚动条 */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* 正文排版样式 */
+.reader-prose {
+  overflow-wrap: break-word;
+  word-break: break-word;
+  hanging-punctuation: allow-end;
+  line-break: strict;
+}
+.reader-prose p {
+  margin: 0;
+}
+.reader-prose h1,
+.reader-prose h2,
+.reader-prose h3,
+.reader-prose h4 {
+  font-weight: 700;
+  line-height: 1.42;
+  letter-spacing: 0.01em;
+  color: var(--text);
+}
+
+.reader-prose blockquote {
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+  padding: 0.85em 1.15em;
+  border-radius: 0 10px 10px 0;
+  color: var(--text-secondary);
+  font-style: normal;
+}
+
+.reader-prose .fn-ref {
+  font-size: 0.72em;
+  color: var(--accent);
+  margin: 0 2px;
+  font-weight: 600;
+}
+
+.reader-prose .fn-clickable {
+  cursor: pointer;
+  padding: 0 3px;
+  border-radius: 4px;
+  background: var(--accent-soft);
+  transition: background-color 0.15s ease, transform 0.15s ease;
+}
+.reader-prose .fn-clickable:hover {
+  background: var(--accent);
+  color: #fff;
+}
+.reader-prose .fn-gloss {
+  font-size: 0.66em;
+  padding: 1px 5px;
+  margin-left: 5px;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  letter-spacing: 0.04em;
+  vertical-align: super;
+}
+
+@keyframes searchFlashPulse {
+  0% { background-color: rgba(234, 179, 8, 0.36); }
+  100% { background-color: transparent; }
+}
+.search-flash-block {
+  animation: searchFlashPulse 2.4s ease-out;
+}
+
+.reader-prose code {
+  background: var(--bg-elevated);
+  padding: 0.12em 0.4em;
+  border-radius: 5px;
+  font-size: 0.88em;
+}
+
+.reader-prose .md-table-wrap {
+  overflow-x: auto;
+  margin: 1rem 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.reader-prose table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88em;
+}
+
+.reader-prose th,
+.reader-prose td {
+  padding: 0.65em 0.9em;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+
+.reader-prose th {
+  background: var(--bg-elevated);
+  font-weight: 600;
+}
+
+/* 正在被微软电台朗读的段落高亮 */
+.tts-speaking-block {
+  background: var(--tts-active-bg);
+  box-shadow: inset 3px 0 0 var(--tts-active-border);
+  border-radius: 8px;
+  transition: background-color 0.35s ease, box-shadow 0.35s ease;
+}
+
+/* 用户手动选中划线与批注样式 */
+.user-hl {
+  background: transparent;
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 1px;
+  cursor: pointer;
+  transition: filter 0.15s ease;
+}
+.user-hl:hover {
+  filter: brightness(0.95);
+}
+.hl-amber {
+  background-color: rgba(234, 179, 8, 0.2);
+  border-bottom: 2px solid rgba(217, 155, 16, 0.85);
+}
+.hl-rose {
+  background-color: rgba(225, 29, 72, 0.15);
+  border-bottom: 2px solid rgba(225, 29, 72, 0.78);
+}
+.hl-emerald {
+  background-color: rgba(16, 185, 129, 0.18);
+  border-bottom: 2px solid rgba(16, 185, 129, 0.82);
+}
+.hl-indigo {
+  background-color: rgba(79, 70, 229, 0.16);
+  border-bottom: 2px solid rgba(79, 70, 229, 0.78);
+}
+.user-hl-note-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "PingFang SC", "Microsoft YaHei UI", sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  width: 16px;
+  height: 16px;
+  margin-left: 2px;
+  vertical-align: super;
+  border-radius: 999px;
+  background-color: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  user-select: none;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+}
+
+/* 迷你声波柱动画 */
+@keyframes eqBounce {
+  0%, 100% { transform: scaleY(0.28); }
+  50% { transform: scaleY(1); }
+}
+
+.eq-bar {
+  transform-origin: bottom;
+  animation: eqBounce 0.95s ease-in-out infinite;
+}
+
+/* 电台旋转黑胶盘动画 */
+@keyframes vinylSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.vinyl-spin {
+  animation: vinylSpin 14s linear infinite;
+}
+.vinyl-paused {
+  animation-play-state: paused;
+}
+
+/* 隐藏横向滚动条但保留滑动 */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* 移动端安全区适配与动效 */
+.safe-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@keyframes sheetSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes backdropFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-sheet-up {
+  animation: sheetSlideUp 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.animate-backdrop-in {
+  animation: backdropFadeIn 0.2s ease-out;
+}
+
+.overscroll-contain {
+  overscroll-behavior: contain;
+}
+
+/* 移动端粗指针（触屏）下扩大脚注角标与批注圆点的触控面积 */
+@media (pointer: coarse) {
+  .reader-prose .fn-clickable {
+    padding: 2px 6px;
+    margin: 0 3px;
+  }
+  .reader-prose .fn-gloss {
+    padding: 2px 7px;
+  }
+  .user-hl-note-dot {
+    width: 19px;
+    height: 19px;
+    font-size: 11px;
+  }
+}
+
+/* 全屏与宽屏仿真书页排版优化 */
+.reader-book-sheet {
+  background-color: var(--bg);
+  border-radius: 18px;
+  box-shadow: var(--shadow-soft);
+  border: 1px solid var(--border);
+}
+
+@media (min-width: 1024px) {
+  .reader-spread-columns {
+    column-count: 2;
+    column-gap: 4.5rem;
+    column-rule: 1px solid var(--border-strong);
+  }
+  .reader-spread-columns .reader-block-unit {
+    break-inside: avoid-column;
+  }
+}

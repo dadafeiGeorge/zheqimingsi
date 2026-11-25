@@ -1,0 +1,20 @@
+- id: credentials
+  name: "@deepseek-ai/dsh-credentials-local"
+  disabled: false
+- id: llm-commandcode
+  name: "@mars-sea/dsh-commandcode-provider"
+  config:
+    apiKeyEnv: COMMANDCODE_API_KEY
+    visibleModels:
+      - deepseek/deepseek-v4.1-flash
+    modelVisibility: {}
+- id: agent-default-model
+  name: "@deepseek-ai/dsh-agent-default-model"
+  config:
+    provider: commandcode
+    model: deepseek/deepseek-v4.1-flash
+    reasoningEffort: low
+- id: permission
+  name: "@deepseek-ai/dsh-permission-presets"
+  config:
+    defaultPreset: danger-full-access

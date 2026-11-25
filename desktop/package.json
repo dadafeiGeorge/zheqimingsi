@@ -1,0 +1,60 @@
+{
+  "name": "zheqimingsi-desktop",
+  "version": "2.0.0",
+  "description": "哲启明思 · 哲学典藏阅读器与微软神经网络电台（Windows 桌面端）",
+  "main": "main.mjs",
+  "type": "module",
+  "scripts": {
+    "start": "electron .",
+    "pack:dir": "electron-builder --win dir",
+    "build:win": "electron-builder --win dir && node scripts/build-portable.mjs"
+  },
+  "devDependencies": {
+    "electron": "^32.2.5",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.zheqimingsi.reader",
+    "productName": "哲启明思",
+    "directories": {
+      "output": "../dist-releases/windows-build"
+    },
+    "files": [
+      "main.mjs",
+      "preload.cjs",
+      "tts-engine.mjs",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../web/dist",
+        "to": "web"
+      },
+      {
+        "from": "../library-data",
+        "to": "library"
+      },
+      {
+        "from": "assets",
+        "to": "assets"
+      }
+    ],
+    "win": {
+      "icon": "assets/icon.ico",
+      "signAndEditExecutable": false,
+      "target": [
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        },
+        {
+          "target": "dir",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "portable": {
+      "artifactName": "哲启明思-Windows便携版.exe"
+    }
+  }
+}
