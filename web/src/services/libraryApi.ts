@@ -1,7 +1,9 @@
 import type {
   BookCatalogItem,
   BookFullTextHit,
+  BookLang,
   BookMeta,
+  BookOverride,
   ChapterContent,
   ContentBlock,
   GlossaryEntry,
@@ -9,13 +11,27 @@ import type {
   SearchIndexItem,
 } from '../types'
 import { getLibraryBase } from './platform'
-import { loadCustomBook, loadCustomBooksCatalog, saveCustomBook, type StoredCustomBook } from './storage'
+import {
+  addDeletedBookId,
+  clearBookOverride,
+  deleteCustomBook,
+  loadBookOverrides,
+  loadCustomBook,
+  loadCustomBooksCatalog,
+  loadDeletedBookIds,
+  restoreAllDeletedBooks,
+  restoreDeletedBookId,
+  saveBookOverride,
+  saveCustomBook,
+  updateCustomBookMeta,
+  type StoredCustomBook,
+} from './storage'
 
 let catalogCache: BookCatalogItem[] | null = null
 let searchIndexCache: SearchIndexItem[] | null = null
 let glossaryCache: GlossaryEntry[] | null = null
 const bookMetaCache = new Map<string, BookMeta>()
-const chunkCache = new Map<string, Record<string, { i: number; t: string; l: number; b: RawBlock[] }>>()
+const chunkCache = new Map<string, Record<string, { i: number; t: string; s?: string; l: number; b: RawBlock[] }>>()
 
 /** 带超时与自动重试的 JSON 拉取，杜绝桌面休眠或瞬时连接抖动导致书籍永久卡加载 */
 async function fetchJsonWithRetry<T>(url: string, errMsg: string, timeoutMs = 12000): Promise<T> {
@@ -148,12 +164,35 @@ function hydrateBlocks(rawBlocks: RawBlock[], chapterIndex: number): ContentBloc
       index: idx,
       type,
       level: rb.l,
+      langRole: rb.m,
       text: rb.t.replace(/⟦fn:\d+⟧/g, ''),
       html,
+      subText: rb.s,
+      subHtml: rb.s ? renderInlineMarkdown(rb.s) : undefined,
       speakText: type === 'hr' ? '' : cleanSpeakText(rb.t),
       footnotes,
     }
   })
+}
+
+function applyBookOverride<T extends BookCatalogItem>(
+  book: T,
+  overrides: Record<string, BookOverride>
+): T {
+  const ov = overrides[book.id]
+  if (!ov) return book
+  return {
+    ...book,
+    ...(ov.category ? { category: ov.category } : {}),
+    ...(ov.lang ? { lang: ov.lang } : {}),
+    ...(ov.title ? { title: ov.title } : {}),
+    ...(ov.author ? { author: ov.author } : {}),
+  }
+}
+
+export function invalidateBookMetaCache(bookId?: string) {
+  if (bookId) bookMetaCache.delete(bookId)
+  else bookMetaCache.clear()
 }
 
 export function getInitialCatalogSync(): BookCatalogItem[] {
@@ -162,11 +201,23 @@ export function getInitialCatalogSync(): BookCatalogItem[] {
       const preloaded = window.electronAPI?.initialCatalog?.books
       if (Array.isArray(preloaded) && preloaded.length > 0) {
         catalogCache = preloaded as BookCatalogItem[]
+      } else if (window.AndroidBridge?.getInitialCatalogJson) {
+        const raw = window.AndroidBridge.getInitialCatalogJson()
+        if (raw) {
+          const parsed = JSON.parse(raw)
+          if (Array.isArray(parsed?.books) && parsed.books.length > 0) {
+            catalogCache = parsed.books as BookCatalogItem[]
+          }
+        }
       }
     }
   } catch {}
   if (!catalogCache) return []
+  const overrides = loadBookOverrides()
+  const deletedSet = new Set(loadDeletedBookIds())
   return [...loadCustomBooksCatalog(), ...catalogCache]
+    .filter((b) => !deletedSet.has(b.id))
+    .map((b) => applyBookOverride(b, overrides))
 }
 
 export async function fetchCatalog(): Promise<BookCatalogItem[]> {
@@ -177,27 +228,74 @@ export async function fetchCatalog(): Promise<BookCatalogItem[]> {
     )
     catalogCache = data.books || []
   }
+  const overrides = loadBookOverrides()
+  const deletedSet = new Set(loadDeletedBookIds())
   const custom = loadCustomBooksCatalog()
   return [...custom, ...catalogCache!]
+    .filter((b) => !deletedSet.has(b.id))
+    .map((b) => applyBookOverride(b, overrides))
+}
+
+export function getDeletedBuiltInBooks(): BookCatalogItem[] {
+  if (!catalogCache) return []
+  const deletedSet = new Set(loadDeletedBookIds())
+  return catalogCache.filter((b) => deletedSet.has(b.id))
+}
+
+export async function reclassifyBook(bookId: string, patch: BookOverride): Promise<void> {
+  saveBookOverride(bookId, patch)
+  if (bookId.startsWith('custom_')) {
+    await updateCustomBookMeta(bookId, patch)
+  }
+  invalidateBookMetaCache(bookId)
+}
+
+export function resetBookClassification(bookId: string): void {
+  clearBookOverride(bookId)
+  invalidateBookMetaCache(bookId)
+}
+
+export async function deleteAnyBook(bookId: string): Promise<void> {
+  if (bookId.startsWith('custom_')) {
+    await deleteCustomBook(bookId)
+    clearBookOverride(bookId)
+  } else {
+    addDeletedBookId(bookId)
+  }
+  invalidateBookMetaCache(bookId)
+}
+
+export function restoreRemovedBuiltInBook(bookId: string): void {
+  restoreDeletedBookId(bookId)
+  invalidateBookMetaCache(bookId)
+}
+
+export function restoreAllRemovedBuiltInBooks(): void {
+  restoreAllDeletedBooks()
+  invalidateBookMetaCache()
 }
 
 export async function fetchBookMeta(bookId: string): Promise<BookMeta> {
   const cached = bookMetaCache.get(bookId)
   if (cached) return cached
 
+  const overrides = loadBookOverrides()
+
   if (bookId.startsWith('custom_')) {
     const cb = await loadCustomBook(bookId)
     if (!cb) throw new Error('本地导入书籍不存在')
-    bookMetaCache.set(bookId, cb.meta)
-    return cb.meta
+    const merged = applyBookOverride(cb.meta, overrides)
+    bookMetaCache.set(bookId, merged)
+    return merged
   }
 
   const meta = await fetchJsonWithRetry<BookMeta>(
     `${getLibraryBase()}/books/${bookId}/meta.json`,
     '无法加载书籍目录'
   )
-  bookMetaCache.set(bookId, meta)
-  return meta
+  const merged = applyBookOverride(meta, overrides)
+  bookMetaCache.set(bookId, merged)
+  return merged
 }
 
 export async function fetchChapter(bookId: string, chapterIndex: number): Promise<ChapterContent> {
@@ -219,7 +317,7 @@ export async function fetchChapter(bookId: string, chapterIndex: number): Promis
 
   let chunkObj = chunkCache.get(chunkKey)
   if (!chunkObj) {
-    chunkObj = await fetchJsonWithRetry<Record<string, { i: number; t: string; l: number; b: RawBlock[] }>>(
+    chunkObj = await fetchJsonWithRetry<Record<string, { i: number; t: string; s?: string; l: number; b: RawBlock[] }>>(
       `${getLibraryBase()}/books/${bookId}/p_${chMeta.chunk}.json`,
       '无法加载章节正文'
     )
@@ -239,6 +337,7 @@ export async function fetchChapter(bookId: string, chapterIndex: number): Promis
     bookId,
     chapterIndex: chMeta.index,
     title: rawCh.t || chMeta.title,
+    subtitle: rawCh.s || chMeta.subtitle,
     level: rawCh.l ?? chMeta.level ?? 1,
     blocks: hydrateBlocks(Array.isArray(rawCh.b) ? rawCh.b : [], chMeta.index),
   }
@@ -453,10 +552,33 @@ export async function lookupPhilosophyTerm(rawQuery: string): Promise<GlossaryEn
   return [...exact, ...partial].slice(0, 4)
 }
 
-/** 导入本地 Markdown / TXT 文档到私人书架 */
-export async function importLocalTextBook(fileName: string, content: string): Promise<BookCatalogItem> {
-  const cleanTitle = fileName.replace(/\.(md|markdown|txt)$/i, '').trim() || '未命名导入书籍'
-  const id = `custom_${Date.now().toString(36)}`
+export interface ImportBookOptions {
+  title?: string
+  author?: string
+  category?: string
+  lang?: BookLang
+}
+
+function inferStationAndPalette(category: string): { station: BookCatalogItem['station']; palette: string } {
+  if (/古希腊|近代/.test(category)) return { station: 'classic', palette: 'bronze-ivory' }
+  if (/德国古典|康德|费希特|谢林|黑格尔/.test(category)) return { station: 'german', palette: 'obsidian-gold' }
+  if (/马克思|批判/.test(category)) return { station: 'marxism', palette: 'crimson-ink' }
+  if (/现象学|存在/.test(category)) return { station: 'phenomenology', palette: 'teal-obsidian' }
+  if (/精神分析|后现代/.test(category)) return { station: 'postmodern', palette: 'indigo-silver' }
+  if (/张世英/.test(category)) return { station: 'chinese', palette: 'celadon-ink' }
+  if (/辞典|术语|百科/.test(category)) return { station: 'reference', palette: 'emerald-gold' }
+  return { station: 'german', palette: 'celadon-ink' }
+}
+
+/** 导入本地 Markdown / TXT 文档到指定公共分类或私人书架 */
+export async function importLocalTextBook(
+  fileName: string,
+  content: string,
+  options?: ImportBookOptions
+): Promise<BookCatalogItem> {
+  const fallbackTitle = fileName.replace(/\.(md|markdown|txt)$/i, '').trim() || '未命名导入书籍'
+  const cleanTitle = options?.title?.trim() || fallbackTitle
+  const id = `custom_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`
   const lines = content.replace(/\r\n/g, '\n').split('\n')
 
   const chaptersRaw: Array<{ title: string; blocks: RawBlock[] }> = []
@@ -511,21 +633,35 @@ export async function importLocalTextBook(fileName: string, content: string): Pr
   })
 
   const firstPara = chapters[0]?.blocks.find((b) => b.type === 'paragraph')?.speakText || '用户导入的私人藏书。'
+  const sampleText = content.slice(0, 6000)
+  const cjkCount = (sampleText.match(/[\u4e00-\u9fff]/g) || []).length
+  const latinCount = (sampleText.match(/[A-Za-z]/g) || []).length
+  const autoLang: BookLang = latinCount > cjkCount * 3 && latinCount > 120 ? 'en' : 'zh'
+  const finalLang: BookLang = options?.lang || autoLang
+  const finalCategory = options?.category?.trim() || '我的导入书架'
+  const finalAuthor = options?.author?.trim() || (finalLang === 'en' ? 'Local Import' : '本地导入')
+  const { station, palette } = inferStationAndPalette(finalCategory)
+  const wordCount =
+    finalLang === 'en'
+      ? chapters.reduce((acc, ch) => acc + ch.blocks.reduce((s, b) => s + (b.text.trim() ? b.text.trim().split(/\s+/).length : 0), 0), 0)
+      : totalChars
 
   const meta: BookMeta = {
     id,
     title: cleanTitle,
-    author: '本地导入',
-    category: '我的导入书架',
-    station: 'german',
+    author: finalAuthor,
+    category: finalCategory,
+    lang: finalLang,
+    station,
     sourceFormat: fileName.endsWith('.txt') ? 'txt' : 'md',
     charCount: totalChars,
+    wordCount,
     chapterCount: chapters.length,
     chunkCount: 1,
-    estReadMin: Math.max(1, Math.round(totalChars / 420)),
-    estListenMin: Math.max(1, Math.round(totalChars / 230)),
-    coverPalette: 'celadon-ink',
-    monogram: cleanTitle[0] || '书',
+    estReadMin: Math.max(1, Math.round(finalLang === 'en' ? wordCount / 220 : totalChars / 420)),
+    estListenMin: Math.max(1, Math.round(finalLang === 'en' ? wordCount / 150 : totalChars / 230)),
+    coverPalette: palette,
+    monogram: (cleanTitle.match(/[A-Za-z\u4e00-\u9fff]/)?.[0] || '书').toUpperCase(),
     excerpt: firstPara.slice(0, 140),
     isCustom: true,
     chapters: chapters.map((c, idx) => ({

@@ -19,12 +19,12 @@ Name "哲启明思"
 Icon "${ICON_PATH}"
 OutFile "${OUT_FILE}"
 
-VIProductVersion "2.0.0.0"
+VIProductVersion "1.2.0.0"
 VIAddVersionKey "ProductName" "哲启明思"
-VIAddVersionKey "FileDescription" "哲启明思 · 哲学典藏阅读与思想电台"
-VIAddVersionKey "FileVersion" "2.0.0"
-VIAddVersionKey "ProductVersion" "2.0.0"
-VIAddVersionKey "LegalCopyright" "哲启明思"
+VIAddVersionKey "FileDescription" "哲启明思 v1.2.0 (2026.11.27) · 哲学典藏阅读与思想电台"
+VIAddVersionKey "FileVersion" "1.2.0"
+VIAddVersionKey "ProductVersion" "1.2.0 (2026.11.27)"
+VIAddVersionKey "LegalCopyright" "哲启明思 · 2026.11.27"
 
 Var CACHE_ROOT
 Var CACHE_DIR

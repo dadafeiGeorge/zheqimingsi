@@ -1,8 +1,10 @@
+/// <reference types="vite/client" />
 import type {
   AiConversation,
   AiSettings,
   BookCatalogItem,
   BookMeta,
+  BookOverride,
   BookmarkItem,
   ChapterContent,
   HighlightItem,
@@ -14,6 +16,7 @@ import type {
   ReadingProgress,
   StudyStats,
   TranslationSettings,
+  UserCollection,
 } from '../types'
 
 const KEYS = {
@@ -27,6 +30,10 @@ const KEYS = {
   radioQueue: 'lumen_radio_queue_v1',
   stats: 'lumen_study_stats_v1',
   favorites: 'lumen_favorite_books_v1',
+  userCollections: 'lumen_user_collections_v1',
+  seeded647Collection: 'lumen_seeded_647_col_v1',
+  bookOverrides: 'lumen_book_overrides_v1',
+  deletedBooks: 'lumen_deleted_books_v1',
   customBooksMeta: 'lumen_custom_books_meta_v1',
   translationSettings: 'lumen_translation_settings_v1',
   aiSettings: 'lumen_ai_settings_v1',
@@ -238,6 +245,119 @@ export function saveFavorites(ids: string[]) {
   localStorage.setItem(KEYS.favorites, JSON.stringify(ids))
 }
 
+const IS_647_EDITION = import.meta.env.VITE_EDITION === '647'
+const DEFAULT_647_COLLECTION_ID = 'col_647_library'
+const DEFAULT_647_BOOK_IDS = [
+  'bk_647_01',
+  'bk_647_02',
+  'bk_647_03',
+  'bk_647_04',
+  'bk_647_05',
+  'bk_647_06',
+]
+
+export function loadUserCollections(): UserCollection[] {
+  const raw = safeParseRaw<UserCollection[]>(localStorage.getItem(KEYS.userCollections), [])
+  const list: UserCollection[] = Array.isArray(raw)
+    ? raw
+        .filter((c) => {
+          if (!c || typeof c.id !== 'string' || typeof c.name !== 'string') return false
+          if (!IS_647_EDITION && (c.id === DEFAULT_647_COLLECTION_ID || c.name.trim() === '647的阅读库')) {
+            return false
+          }
+          return true
+        })
+        .map((c) => ({
+          id: c.id,
+          name: c.name.trim() || '未命名合集',
+          zone: c.zone === 'en' || c.zone === 'all' ? c.zone : 'zh',
+          bookIds: Array.isArray(c.bookIds)
+            ? Array.from(
+                new Set(
+                  c.bookIds.filter((x) => typeof x === 'string' && (IS_647_EDITION || !x.startsWith('bk_647_')))
+                )
+              )
+            : [],
+          createdAt: typeof c.createdAt === 'number' ? c.createdAt : Date.now(),
+          updatedAt: typeof c.updatedAt === 'number' ? c.updatedAt : Date.now(),
+        }))
+    : []
+
+  if (IS_647_EDITION) {
+    try {
+      if (!localStorage.getItem(KEYS.seeded647Collection)) {
+        if (!list.some((s) => s.id === DEFAULT_647_COLLECTION_ID || s.name === '647的阅读库')) {
+          const now = Date.now()
+          list.unshift({
+            id: DEFAULT_647_COLLECTION_ID,
+            name: '647的阅读库',
+            zone: 'all',
+            bookIds: [...DEFAULT_647_BOOK_IDS],
+            createdAt: now,
+            updatedAt: now,
+          })
+          localStorage.setItem(KEYS.userCollections, JSON.stringify(list))
+        }
+        localStorage.setItem(KEYS.seeded647Collection, '1')
+      }
+    } catch {}
+  }
+
+  return list
+}
+
+export function saveUserCollections(list: UserCollection[]) {
+  localStorage.setItem(KEYS.userCollections, JSON.stringify(list))
+}
+
+/* ---------- 图书自由归类覆写 & 删除/恢复管理 ---------- */
+export function loadBookOverrides(): Record<string, BookOverride> {
+  const raw = safeParseRaw<Record<string, BookOverride>>(localStorage.getItem(KEYS.bookOverrides), {})
+  return raw && typeof raw === 'object' ? raw : {}
+}
+
+export function saveBookOverride(bookId: string, patch: BookOverride) {
+  const all = loadBookOverrides()
+  const merged: BookOverride = { ...(all[bookId] || {}), ...patch }
+  if (!merged.category) delete merged.category
+  if (!merged.lang) delete merged.lang
+  if (!merged.title) delete merged.title
+  if (!merged.author) delete merged.author
+  if (Object.keys(merged).length === 0) {
+    delete all[bookId]
+  } else {
+    all[bookId] = merged
+  }
+  localStorage.setItem(KEYS.bookOverrides, JSON.stringify(all))
+}
+
+export function clearBookOverride(bookId: string) {
+  const all = loadBookOverrides()
+  if (bookId in all) {
+    delete all[bookId]
+    localStorage.setItem(KEYS.bookOverrides, JSON.stringify(all))
+  }
+}
+
+export function loadDeletedBookIds(): string[] {
+  const raw = safeParseRaw<string[]>(localStorage.getItem(KEYS.deletedBooks), [])
+  return Array.isArray(raw) ? Array.from(new Set(raw.filter((x) => typeof x === 'string'))) : []
+}
+
+export function addDeletedBookId(bookId: string) {
+  const next = Array.from(new Set([...loadDeletedBookIds(), bookId]))
+  localStorage.setItem(KEYS.deletedBooks, JSON.stringify(next))
+}
+
+export function restoreDeletedBookId(bookId: string) {
+  const next = loadDeletedBookIds().filter((id) => id !== bookId)
+  localStorage.setItem(KEYS.deletedBooks, JSON.stringify(next))
+}
+
+export function restoreAllDeletedBooks() {
+  localStorage.setItem(KEYS.deletedBooks, JSON.stringify([]))
+}
+
 export function loadStats(): StudyStats {
   return safeParse(localStorage.getItem(KEYS.stats), {
     totalReadSeconds: 0,
@@ -315,6 +435,33 @@ export async function loadCustomBook(id: string): Promise<StoredCustomBook | nul
   })
 }
 
+export async function updateCustomBookMeta(id: string, patch: BookOverride): Promise<void> {
+  const existing = await loadCustomBook(id)
+  if (existing) {
+    const nextMeta: BookMeta = {
+      ...existing.meta,
+      ...(patch.category ? { category: patch.category } : {}),
+      ...(patch.lang ? { lang: patch.lang } : {}),
+      ...(patch.title ? { title: patch.title } : {}),
+      ...(patch.author ? { author: patch.author } : {}),
+    }
+    await saveCustomBook({ ...existing, meta: nextMeta })
+    return
+  }
+  const list = loadCustomBooksCatalog().map((b) =>
+    b.id === id
+      ? {
+          ...b,
+          ...(patch.category ? { category: patch.category } : {}),
+          ...(patch.lang ? { lang: patch.lang } : {}),
+          ...(patch.title ? { title: patch.title } : {}),
+          ...(patch.author ? { author: patch.author } : {}),
+        }
+      : b
+  )
+  localStorage.setItem(KEYS.customBooksMeta, JSON.stringify(list))
+}
+
 export async function deleteCustomBook(id: string): Promise<void> {
   const db = await openDb()
   await new Promise<void>((resolve, reject) => {
@@ -331,7 +478,9 @@ export async function deleteCustomBook(id: string): Promise<void> {
 export function exportFullBackupJson(): string {
   const payload = {
     app: '哲启明思',
-    schemaVersion: 2,
+    appVersion: '1.2.0',
+    buildDate: '2026.11.27',
+    schemaVersion: 3,
     exportedAt: new Date().toISOString(),
     readerSettings: loadReaderSettings(),
     radioSettings: loadRadioSettings(),
@@ -343,6 +492,9 @@ export function exportFullBackupJson(): string {
     highlights: loadHighlights(),
     bookmarks: loadBookmarks(),
     favorites: loadFavorites(),
+    userCollections: loadUserCollections(),
+    bookOverrides: loadBookOverrides(),
+    deletedBookIds: loadDeletedBookIds(),
     radioQueue: loadRadioQueue(),
     stats: loadStats(),
   }
@@ -399,6 +551,44 @@ export function importFullBackupJson(rawText: string): {
   if (Array.isArray(data.favorites)) {
     const mergedFav = Array.from(new Set([...loadFavorites(), ...data.favorites]))
     saveFavorites(mergedFav)
+  }
+
+  if (Array.isArray(data.userCollections)) {
+    const cur = loadUserCollections()
+    const map = new Map<string, UserCollection>(cur.map((c) => [c.id, c]))
+    for (const c of data.userCollections) {
+      if (c?.id && c?.name) {
+        const existing = map.get(c.id)
+        if (existing) {
+          map.set(c.id, {
+            ...existing,
+            name: (c.updatedAt || 0) >= existing.updatedAt ? c.name : existing.name,
+            bookIds: Array.from(new Set([...existing.bookIds, ...(Array.isArray(c.bookIds) ? c.bookIds : [])])),
+            updatedAt: Math.max(existing.updatedAt, c.updatedAt || 0),
+          })
+        } else {
+          map.set(c.id, {
+            id: c.id,
+            name: String(c.name).trim() || '未命名合集',
+            zone: c.zone === 'en' || c.zone === 'all' ? c.zone : 'zh',
+            bookIds: Array.isArray(c.bookIds) ? Array.from(new Set(c.bookIds)) : [],
+            createdAt: c.createdAt || Date.now(),
+            updatedAt: c.updatedAt || Date.now(),
+          })
+        }
+      }
+    }
+    saveUserCollections(Array.from(map.values()))
+  }
+
+  if (data.bookOverrides && typeof data.bookOverrides === 'object') {
+    const cur = loadBookOverrides()
+    localStorage.setItem(KEYS.bookOverrides, JSON.stringify({ ...cur, ...data.bookOverrides }))
+  }
+
+  if (Array.isArray(data.deletedBookIds)) {
+    const mergedDel = Array.from(new Set([...loadDeletedBookIds(), ...data.deletedBookIds.filter((x: unknown) => typeof x === 'string')]))
+    localStorage.setItem(KEYS.deletedBooks, JSON.stringify(mergedDel))
   }
 
   if (Array.isArray(data.radioQueue)) {

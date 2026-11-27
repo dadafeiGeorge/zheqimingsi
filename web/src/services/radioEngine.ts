@@ -120,9 +120,11 @@ export function getStationBookGroups(
   }
   const allUnique = Array.from(uniqueMap.values())
   const readable = allUnique.filter((b) => !isReferenceBook(b))
+  const zhReadable = readable.filter((b) => b.lang !== 'en')
+  const enReadable = readable.filter((b) => b.lang === 'en')
 
   if (stationId === 'classic') {
-    const pool = readable.filter((b) => b.station === 'classic')
+    const pool = zhReadable.filter((b) => b.station === 'classic')
     const stace = pool.filter((b) => /斯退士/.test(b.author))
     const earlyModern = pool.filter((b) => /笛卡尔|莱布尼茨|洛克/.test(b.author))
     const used = new Set([...stace, ...earlyModern].map((b) => b.id))
@@ -135,7 +137,7 @@ export function getStationBookGroups(
   }
 
   if (stationId === 'german') {
-    const pool = readable.filter((b) => b.station === 'german')
+    const pool = zhReadable.filter((b) => b.station === 'german')
     const kant = pool.filter((b) => /康德/.test(b.author))
     const hegel = pool.filter((b) => /黑格尔|斯退士|努佐|迪乔瓦尼|庄振华/.test(b.author) || /黑格尔|小逻辑/.test(b.title))
     const schelling = pool.filter((b) => /谢林|马修斯/.test(b.author) && !hegel.includes(b))
@@ -154,7 +156,7 @@ export function getStationBookGroups(
   }
 
   if (stationId === 'marxism') {
-    const pool = readable.filter((b) => b.station === 'marxism')
+    const pool = zhReadable.filter((b) => b.station === 'marxism')
     const marxLenin = pool.filter((b) => /马克思|列宁/.test(b.author))
     const lukacs = pool.filter((b) => /卢卡奇/.test(b.author) && !/阿多诺/.test(b.author))
     const althusser = pool.filter((b) => /阿尔都塞/.test(b.author))
@@ -171,7 +173,7 @@ export function getStationBookGroups(
   }
 
   if (stationId === 'phenomenology') {
-    const pool = readable.filter((b) => b.station === 'phenomenology')
+    const pool = zhReadable.filter((b) => b.station === 'phenomenology')
     const heidegger = pool.filter((b) => /海德格尔/.test(b.author) || /存在与时间/.test(b.title))
     const used = new Set(heidegger.map((b) => b.id))
     const rest = pool.filter((b) => !used.has(b.id))
@@ -182,7 +184,7 @@ export function getStationBookGroups(
   }
 
   if (stationId === 'postmodern') {
-    const pool = readable.filter((b) => b.station === 'postmodern')
+    const pool = zhReadable.filter((b) => b.station === 'postmodern')
     const lacan = pool.filter((b) => /拉康|芬克|蒙卡约|托姆希奇/.test(b.author))
     const baudrillard = pool.filter((b) => /鲍德里亚|霍罗克斯/.test(b.author))
     const used = new Set([...lacan, ...baudrillard].map((b) => b.id))
@@ -190,12 +192,12 @@ export function getStationBookGroups(
     return [
       { label: '拉康与精神分析研讨班', books: lacan },
       { label: '鲍德里亚拟像与消费社会', books: baudrillard },
-      { label: '齐泽克与巴迪欧当代思辨', books: zizekBadiou },
+      { label: '齐泽克、德里达与巴迪欧当代思辨', books: zizekBadiou },
     ].filter((g) => g.books.length > 0)
   }
 
   if (stationId === 'chinese') {
-    const pool = readable.filter((b) => b.station === 'chinese' || b.category === '张世英哲学全书')
+    const pool = zhReadable.filter((b) => b.station === 'chinese' || b.category === '张世英哲学全书')
     const volumes = pool.filter((b) => /文集/.test(b.title))
     const used = new Set(volumes.map((b) => b.id))
     const intro = pool.filter((b) => !used.has(b.id) && /导论|哲学史/.test(b.title))
@@ -209,7 +211,7 @@ export function getStationBookGroups(
   }
 
   if (stationId === 'roam') {
-    const list = [...readable]
+    const list = [...zhReadable]
     let seed = (roamSeed + 1) * 2654435761
     for (let i = list.length - 1; i > 0; i--) {
       seed = (seed * 1664525 + 1013904223) >>> 0
@@ -218,7 +220,7 @@ export function getStationBookGroups(
       list[i] = list[j]
       list[j] = tmp
     }
-    return [{ label: '全库经典不重复漫游队列', books: list }]
+    return [{ label: '全库中文经典不重复漫游队列', books: list }]
   }
 
   const groups: StationBookGroup[] = []
@@ -226,14 +228,16 @@ export function getStationBookGroups(
   if (activeBook) {
     groups.push({ label: '当前随书播送', books: [activeBook] })
   }
-  const rest = readable.filter((b) => b.id !== activeBook?.id)
+  const restZh = zhReadable.filter((b) => b.id !== activeBook?.id)
+  const restEn = enReadable.filter((b) => b.id !== activeBook?.id)
   const buckets: Array<[string, BookCatalogItem[]]> = [
-    ['古希腊与近代哲思', rest.filter((b) => b.station === 'classic')],
-    ['德国古典原典', rest.filter((b) => b.station === 'german')],
-    ['马克思与批判理论', rest.filter((b) => b.station === 'marxism')],
-    ['现象学与存在哲学', rest.filter((b) => b.station === 'phenomenology')],
-    ['精神分析与后现代', rest.filter((b) => b.station === 'postmodern')],
-    ['张世英哲学全书', rest.filter((b) => b.station === 'chinese' || b.category === '张世英哲学全书')],
+    ['古希腊与近代哲思', restZh.filter((b) => b.station === 'classic')],
+    ['德国古典原典', restZh.filter((b) => b.station === 'german')],
+    ['马克思与批判理论', restZh.filter((b) => b.station === 'marxism')],
+    ['现象学与存在哲学', restZh.filter((b) => b.station === 'phenomenology')],
+    ['精神分析与后现代', restZh.filter((b) => b.station === 'postmodern')],
+    ['张世英哲学全书', restZh.filter((b) => b.station === 'chinese' || b.category === '张世英哲学全书')],
+    ['英文哲学原典 (EN)', restEn],
   ]
   for (const [label, list] of buckets) {
     if (list.length > 0) groups.push({ label, books: list })
@@ -276,6 +280,10 @@ export const CURATED_VOICES: TtsVoice[] = [
   { shortName: 'zh-HK-WanLungNeural', label: '云龙 · 粤语沉稳男声', gender: 'Male', locale: 'zh-HK', tag: '粤语' },
   { shortName: 'zh-CN-liaoning-XiaobeiNeural', label: '晓北 · 东北风味女声', gender: 'Female', locale: 'zh-CN', tag: '方言' },
   { shortName: 'zh-CN-shaanxi-XiaoniNeural', label: '晓妮 · 陕西风味女声', gender: 'Female', locale: 'zh-CN', tag: '方言' },
+  { shortName: 'en-US-AndrewNeural', label: 'Andrew · 美式学术男声 (EN)', gender: 'Male', locale: 'en-US', tag: '英文原典' },
+  { shortName: 'en-US-AriaNeural', label: 'Aria · 美式知性女声 (EN)', gender: 'Female', locale: 'en-US', tag: '英文原典' },
+  { shortName: 'en-GB-RyanNeural', label: 'Ryan · 英式学院男声 (EN)', gender: 'Male', locale: 'en-GB', tag: '英伦原声' },
+  { shortName: 'en-GB-SoniaNeural', label: 'Sonia · 英式典雅女声 (EN)', gender: 'Female', locale: 'en-GB', tag: '英伦原声' },
 ]
 
 interface SpeakSegment {

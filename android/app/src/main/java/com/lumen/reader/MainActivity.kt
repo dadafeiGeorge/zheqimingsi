@@ -73,15 +73,30 @@ class MainActivity : AppCompatActivity() {
             .build()
     }
     private val activeStreamCalls = ConcurrentHashMap<String, Call>()
+    private val cachedCatalogJson: String by lazy {
+        runCatching {
+            assets.open("web/library/catalog.json").bufferedReader(Charsets.UTF_8).use { it.readText() }
+        }.getOrDefault("")
+    }
 
     private val filePickerLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
         val cb = filePathCallback ?: return@registerForActivityResult
         filePathCallback = null
-        val uri = result.data?.data
-        if (result.resultCode == RESULT_OK && uri != null) {
-            cb.onReceiveValue(arrayOf(uri))
+        if (result.resultCode == RESULT_OK) {
+            val data = result.data
+            val clip = data?.clipData
+            if (clip != null && clip.itemCount > 0) {
+                val uris = ArrayList<Uri>(clip.itemCount)
+                for (i in 0 until clip.itemCount) {
+                    clip.getItemAt(i)?.uri?.let { uris.add(it) }
+                }
+                cb.onReceiveValue(if (uris.isNotEmpty()) uris.toTypedArray() else null)
+            } else {
+                val uri = data?.data
+                cb.onReceiveValue(if (uri != null) arrayOf(uri) else null)
+            }
         } else {
             cb.onReceiveValue(null)
         }
@@ -122,7 +137,7 @@ class MainActivity : AppCompatActivity() {
             settings.allowFileAccess = false
             settings.allowContentAccess = true
             settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
-            settings.cacheMode = WebSettings.LOAD_DEFAULT
+            settings.cacheMode = WebSettings.LOAD_NO_CACHE
             // 锁定 WebView 缩放基准，防止系统大字体/双击缩放破坏阅读分页与排版布局
             settings.textZoom = 100
             settings.setSupportZoom(false)
@@ -157,6 +172,9 @@ class MainActivity : AppCompatActivity() {
                     val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                         addCategory(Intent.CATEGORY_OPENABLE)
                         type = "*/*"
+                        if (fileChooserParams?.mode == WebChromeClient.FileChooserParams.MODE_OPEN_MULTIPLE) {
+                            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                        }
                     }
                     return try {
                         filePickerLauncher.launch(intent)
@@ -209,6 +227,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        webView.clearCache(true)
         webView.loadUrl("https://appassets.androidplatform.net/assets/web/index.html")
     }
 
@@ -281,7 +300,10 @@ class MainActivity : AppCompatActivity() {
     inner class AndroidJsBridge {
 
         @JavascriptInterface
-        fun getAppVersion(): String = "1.0.0"
+        fun getAppVersion(): String = "1.2.0 (2026.11.27)"
+
+        @JavascriptInterface
+        fun getInitialCatalogJson(): String = cachedCatalogJson
 
         @JavascriptInterface
         fun setStatusBarTheme(isDark: Boolean, bgColorHex: String) {

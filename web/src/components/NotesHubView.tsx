@@ -12,7 +12,7 @@ import {
 } from 'lucide-react'
 import type { BookmarkItem, HighlightItem, StudyStats } from '../types'
 import { QuoteCardModal } from './QuoteCardModal'
-import { notifyToast } from '../services/platform'
+import { notifyToast, triggerHaptic } from '../services/platform'
 import { exportFullBackupJson, importFullBackupJson } from '../services/storage'
 
 interface NotesHubViewProps {
@@ -140,15 +140,15 @@ export const NotesHubView: React.FC<NotesHubViewProps> = ({
   }
 
   return (
-    <div className="h-full overflow-y-auto px-4 md:px-8 pt-4 md:pt-5 pb-36">
-      <div className="max-w-5xl mx-auto space-y-5 md:space-y-6">
+    <div className="h-full overflow-y-auto overscroll-contain px-3.5 md:px-8 pt-3 md:pt-5 pb-28 md:pb-36">
+      <div className="max-w-5xl mx-auto space-y-4 md:space-y-6">
         {/* 标题与导出/跨端备份恢复 */}
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2.5 sm:gap-3">
           <div>
             <p className="hidden sm:block text-[11px] font-mono tracking-[0.2em] uppercase" style={{ color: 'var(--accent)' }}>
               MARGINALIA & STUDY ANALYTICS
             </p>
-            <h1 className="text-xl sm:text-2xl font-serif font-bold mt-0.5 sm:mt-1">思想笔记与书房足迹</h1>
+            <h1 className="text-lg sm:text-2xl font-serif font-bold mt-0.5 sm:mt-1">思想笔记与书房足迹</h1>
           </div>
 
           <div className="grid grid-cols-3 sm:flex sm:flex-wrap items-center gap-2">
@@ -192,23 +192,23 @@ export const NotesHubView: React.FC<NotesHubViewProps> = ({
         </div>
 
         {/* 统计卡片 */}
-        <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <section className="grid grid-cols-2 md:grid-cols-4 gap-2.5 md:gap-3">
           {[
-            { icon: <Clock className="w-4 h-4" />, label: '累计阅读', value: formatDuration(stats.totalReadSeconds) },
-            { icon: <Headphones className="w-4 h-4" />, label: '电台收听', value: formatDuration(stats.totalListenSeconds) },
-            { icon: <BookOpen className="w-4 h-4" />, label: '涉猎典籍', value: `${stats.booksOpened.length} 部` },
-            { icon: <Sparkles className="w-4 h-4" />, label: '金句批注', value: `${displayHighlights.length} 条` },
+            { icon: <Clock className="w-3.5 h-3.5 md:w-4 md:h-4" />, label: '累计阅读', value: formatDuration(stats.totalReadSeconds) },
+            { icon: <Headphones className="w-3.5 h-3.5 md:w-4 md:h-4" />, label: '电台收听', value: formatDuration(stats.totalListenSeconds) },
+            { icon: <BookOpen className="w-3.5 h-3.5 md:w-4 md:h-4" />, label: '涉猎典籍', value: `${stats.booksOpened.length} 部` },
+            { icon: <Sparkles className="w-3.5 h-3.5 md:w-4 md:h-4" />, label: '金句批注', value: `${displayHighlights.length} 条` },
           ].map((item, idx) => (
             <div
               key={idx}
-              className="p-4 rounded-2xl border"
+              className="p-3 md:p-4 rounded-2xl border"
               style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border)' }}
             >
-              <div className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--accent)' }}>
+              <div className="flex items-center gap-1.5 text-[11px] md:text-xs" style={{ color: 'var(--accent)' }}>
                 {item.icon}
                 <span>{item.label}</span>
               </div>
-              <div className="text-xl font-serif font-bold mt-2">{item.value}</div>
+              <div className="text-lg md:text-xl font-serif font-bold mt-1.5 md:mt-2">{item.value}</div>
             </div>
           ))}
         </section>
@@ -259,8 +259,11 @@ export const NotesHubView: React.FC<NotesHubViewProps> = ({
         {/* 摘录 / 书签切换 */}
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setSubTab('highlights')}
-            className="px-4 py-2 rounded-full text-xs font-semibold border transition-colors"
+            onClick={() => {
+              triggerHaptic()
+              setSubTab('highlights')
+            }}
+            className="px-3.5 md:px-4 py-1.5 md:py-2 rounded-full text-xs font-semibold border transition-colors active:scale-95"
             style={
               subTab === 'highlights'
                 ? { backgroundColor: 'var(--accent)', color: '#fff', borderColor: 'var(--accent)' }
@@ -270,8 +273,11 @@ export const NotesHubView: React.FC<NotesHubViewProps> = ({
             划线与批注 ({displayHighlights.length})
           </button>
           <button
-            onClick={() => setSubTab('bookmarks')}
-            className="px-4 py-2 rounded-full text-xs font-semibold border transition-colors"
+            onClick={() => {
+              triggerHaptic()
+              setSubTab('bookmarks')
+            }}
+            className="px-3.5 md:px-4 py-1.5 md:py-2 rounded-full text-xs font-semibold border transition-colors active:scale-95"
             style={
               subTab === 'bookmarks'
                 ? { backgroundColor: 'var(--accent)', color: '#fff', borderColor: 'var(--accent)' }
@@ -370,6 +376,13 @@ export const NotesHubView: React.FC<NotesHubViewProps> = ({
             ))}
           </div>
         )}
+
+        <footer
+          className="pt-4 pb-2 text-center text-[11px] font-mono tracking-wider opacity-60"
+          style={{ color: 'var(--text-muted)' }}
+        >
+          哲启明思 · PHILO FM · v1.2.0 (2026.11.27)
+        </footer>
       </div>
 
       {quoteItem && (

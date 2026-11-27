@@ -21,6 +21,7 @@ TOTAL_FN_STATS = {"folded": 0, "bound": 0, "gloss": 0, "cross_bound": 0, "pruned
 SOURCE_ROOT = Path(r"D:\文献库\中文译本")
 EXTRA_ROOT = Path(r"D:\咕咕嘎嘎反重力\extra-books")
 NEW_BOOKS_ROOT = Path(r"D:\咕咕嘎嘎反重力\new-books")
+ENGLISH_BOOKS_ROOT = Path(r"D:\咕咕嘎嘎反重力\english-books")
 OUT_ROOT = Path(r"D:\咕咕嘎嘎反重力\library-data")
 
 BOOK_META_OVERRIDES = {
@@ -84,6 +85,9 @@ BOOK_META_OVERRIDES = {
     "策略与伦理：政治文集 1919—1929": ("策略与伦理：政治文集 1919—1929", "格奥尔格·卢卡奇", "马克思与批判理论", "marxism"),
     "民主化的进程-卢卡奇（中文版）": ("民主化的进程", "格奥尔格·卢卡奇", "马克思与批判理论", "marxism"),
     "启蒙辩证法": ("启蒙辩证法：哲学断片", "霍克海默 / 阿多诺", "马克思与批判理论", "marxism"),
+    "否定辩证法": ("否定辩证法", "特奥多尔·W. 阿多诺", "马克思与批判理论", "marxism"),
+    "反认识论": ("反认识论：对胡塞尔与现象学二律背反的元批判", "特奥多尔·W. 阿多诺", "马克思与批判理论", "marxism"),
+    "本真性的行话": ("本真性的行话", "特奥多尔·W. 阿多诺", "马克思与批判理论", "marxism"),
     "单向度的人：发达工业社会意识形态研究": ("单向度的人", "赫伯特·马尔库塞", "马克思与批判理论", "marxism"),
     "美学与政治": ("美学与政治", "阿多诺 / 本雅明 / 布洛赫 / 布莱希特 / 卢卡奇", "马克思与批判理论", "marxism"),
     "读《资本论》": ("读《资本论》", "路易·阿尔都塞 / 艾蒂安·巴里巴尔", "马克思与批判理论", "marxism"),
@@ -96,6 +100,7 @@ BOOK_META_OVERRIDES = {
 
     # 4. 现象学与存在哲学 (phenomenology)
     "德国观念论与当前哲学的困境": ("德国观念论与当前哲学的困境", "马丁·海德格尔", "现象学与存在哲学", "phenomenology"),
+    "时间概念史导论": ("时间概念史导论", "马丁·海德格尔", "现象学与存在哲学", "phenomenology"),
     "《存在与时间》释义": ("《存在与时间》释义", "张汝伦", "现象学与存在哲学", "phenomenology"),
     "现代西方哲学十五讲": ("现代西方哲学十五讲", "张汝伦", "现象学与存在哲学", "phenomenology"),
     "黑格尔与我们同在": ("黑格尔与我们同在", "张汝伦", "现象学与存在哲学", "phenomenology"),
@@ -107,6 +112,9 @@ BOOK_META_OVERRIDES = {
     "芬克《拉康式主体》中译本": ("拉康式主体：在语言与享乐之间", "布鲁斯·芬克", "精神分析与后现代", "postmodern"),
     "蒙卡约《拉康精神分析的实践》中译本": ("拉康精神分析的实践", "劳尔·蒙卡约", "精神分析与后现代", "postmodern"),
     "齐泽克《如何阅读拉康》中译本": ("如何阅读拉康", "斯拉沃热·齐泽克", "精神分析与后现代", "postmodern"),
+    "知否：享乐作为政治因素": ("知否：享乐作为政治因素", "斯拉沃热·齐泽克", "精神分析与后现代", "postmodern"),
+    "延迟的否定": ("延迟的否定：康德、黑格尔与意识形态批判", "斯拉沃热·齐泽克", "精神分析与后现代", "postmodern"),
+    "书写与差异": ("书写与差异", "雅克·德里达", "精神分析与后现代", "postmodern"),
     "托姆希奇与泽夫尼克《拉康：在精神分析与政治之间》中译本": ("拉康：在精神分析与政治之间", "托姆希奇 / 泽夫尼克", "精神分析与后现代", "postmodern"),
     "拟像与仿真": ("拟像与仿真", "让·鲍德里亚", "精神分析与后现代", "postmodern"),
     "消费社会": ("消费社会", "让·鲍德里亚", "精神分析与后现代", "postmodern"),
@@ -137,6 +145,95 @@ BOOK_META_OVERRIDES = {
     "康德辞典": ("康德辞典", "卢卡斯·索普", "辞典与术语工具", "reference"),
     "康德辞典（第 1 卷）": ("康德辞典（第 1 卷）", "维拉舍克 等编", "辞典与术语工具", "reference"),
     "00_拉康术语表": ("拉康术语译名表", "学术译名统一表", "辞典与术语工具", "reference"),
+}
+
+ENGLISH_BOOK_META = {
+    # 1. 古希腊与近代原典 (classic)
+    "a-critical-history-of-greek-philosophy": ("A Critical History of Greek Philosophy", "W. T. Stace", "古希腊与近代原典", "classic"),
+    "religion-and-the-modern-mind": ("Religion and the Modern Mind", "W. T. Stace", "古希腊与近代原典", "classic"),
+    "discourse-on-metaphysics-and-the-monadology": ("Discourse on Metaphysics and The Monadology", "G. W. Leibniz", "古希腊与近代原典", "classic"),
+    "the-complete-works-of-john-locke": ("The Complete Works of John Locke", "John Locke", "古希腊与近代原典", "classic"),
+
+    # 2. 康德·费希特与谢林 (german)
+    "critique-of-pure-reason": ("Critique of Pure Reason", "Immanuel Kant", "康德·费希特与谢林", "german"),
+    "critique-of-practical-reason": ("Critique of Practical Reason", "Immanuel Kant", "康德·费希特与谢林", "german"),
+    "critique-of-the-power-of-judgment": ("Critique of the Power of Judgment", "Immanuel Kant", "康德·费希特与谢林", "german"),
+    "the-system-of-ethics": ("The System of Ethics", "J. G. Fichte", "康德·费希特与谢林", "german"),
+    "works-of-johann-gottlieb-fichte": ("Works of Johann Gottlieb Fichte", "J. G. Fichte", "康德·费希特与谢林", "german"),
+    "fichte-studies": ("Fichte Studies", "Novalis", "康德·费希特与谢林", "german"),
+    "system-of-transcendental-idealism": ("System of Transcendental Idealism", "F. W. J. Schelling", "康德·费希特与谢林", "german"),
+    "first-outline-of-a-system-of-the-philosophy-of-nature": ("First Outline of a System of the Philosophy of Nature", "F. W. J. Schelling", "康德·费希特与谢林", "german"),
+    "the-philosophy-of-art": ("The Philosophy of Art", "F. W. J. Schelling", "康德·费希特与谢林", "german"),
+    "clara-or-on-nature-s-connection-to-the-spirit-world": ("Clara, or On Nature's Connection to the Spirit World", "F. W. J. Schelling", "康德·费希特与谢林", "german"),
+    "historical-critical-introduction-to-the-philosophy-of-mythology": ("Historical-Critical Introduction to the Philosophy of Mythology", "F. W. J. Schelling", "康德·费希特与谢林", "german"),
+    "the-grounding-of-positive-philosophy-the-berlin-lectures": ("The Grounding of Positive Philosophy: The Berlin Lectures", "F. W. J. Schelling", "康德·费希特与谢林", "german"),
+    "idealism-and-the-endgame-of-theory-three-essays-by-f-w-j-schelling": ("Idealism and the Endgame of Theory: Three Essays", "F. W. J. Schelling", "康德·费希特与谢林", "german"),
+    "the-philosophical-rupture-between-fichte-and-schelling-selected-texts-and-correspondence-1800-1802": ("The Philosophical Rupture between Fichte and Schelling (1800–1802)", "F. W. J. Schelling & J. G. Fichte", "康德·费希特与谢林", "german"),
+    "schelling-s-organic-form-of-philosophy-life-as-the-schema-of-freedom": ("Schelling's Organic Form of Philosophy: Life as the Schema of Freedom", "Bruce Matthews", "康德·费希特与谢林", "german"),
+
+    # 3. 黑格尔原典与研究 (german)
+    "the-phenomenology-of-spirit": ("The Phenomenology of Spirit", "G. W. F. Hegel", "黑格尔原典与研究", "german"),
+    "the-science-of-logic": ("The Science of Logic", "G. W. F. Hegel", "黑格尔原典与研究", "german"),
+    "the-encyclopaedia-logic-part-i-of-the-encyclopaedia-of-the-philosophical-sciences": ("The Encyclopaedia Logic (Part I)", "G. W. F. Hegel", "黑格尔原典与研究", "german"),
+    "hegels-philosophy-of-nature": ("Hegel's Philosophy of Nature", "G. W. F. Hegel", "黑格尔原典与研究", "german"),
+    "the-philosophy-of-history": ("The Philosophy of History", "G. W. F. Hegel", "黑格尔原典与研究", "german"),
+    "lectures-on-the-philosophy-of-world-history-introduction": ("Lectures on the Philosophy of World History: Introduction", "G. W. F. Hegel", "黑格尔原典与研究", "german"),
+    "lectures-on-the-history-of-philosophy-vol-i": ("Lectures on the History of Philosophy, Vol. I", "G. W. F. Hegel", "黑格尔原典与研究", "german"),
+    "lectures-on-the-history-of-philosophy-vol-ii": ("Lectures on the History of Philosophy, Vol. II", "G. W. F. Hegel", "黑格尔原典与研究", "german"),
+    "lectures-on-the-history-of-philosophy-volume-iii": ("Lectures on the History of Philosophy, Vol. III", "G. W. F. Hegel", "黑格尔原典与研究", "german"),
+    "essays-on-hegels-logic": ("Essays on Hegel's Logic", "George di Giovanni (ed.)", "黑格尔原典与研究", "german"),
+    "the-philosophy-of-hegel": ("The Philosophy of Hegel", "W. T. Stace", "黑格尔原典与研究", "german"),
+
+    # 4. 马克思与批判理论 (marxism)
+    "critique-of-hegels-philosophy-of-right": ("Critique of Hegel's Philosophy of Right", "Karl Marx", "马克思与批判理论", "marxism"),
+    "collected-works-volume-38-philosophical-notebooks": ("Collected Works, Vol. 38: Philosophical Notebooks", "V. I. Lenin", "马克思与批判理论", "marxism"),
+    "history-and-class-consciousness": ("History and Class Consciousness", "Georg Lukács", "马克思与批判理论", "marxism"),
+    "the-young-hegel-studies-in-the-relations-between-dialectics-and-economics": ("The Young Hegel: Dialectics and Economics", "Georg Lukács", "马克思与批判理论", "marxism"),
+    "the-destruction-of-reason": ("The Destruction of Reason", "Georg Lukács", "马克思与批判理论", "marxism"),
+    "ontology-of-social-being-vol-i": ("Ontology of Social Being, Vol. I: Hegel", "Georg Lukács", "马克思与批判理论", "marxism"),
+    "ontology-of-social-being-vol-ii": ("Ontology of Social Being, Vol. II: Marx", "Georg Lukács", "马克思与批判理论", "marxism"),
+    "ontology-of-social-being-vol-iii": ("Ontology of Social Being, Vol. III: Labour", "Georg Lukács", "马克思与批判理论", "marxism"),
+    "lenin-a-study-on-the-unity-of-his-thought": ("Lenin: A Study on the Unity of His Thought", "Georg Lukács", "马克思与批判理论", "marxism"),
+    "tactics-and-ethics-political-writings-1919-1929": ("Tactics and Ethics: Political Writings 1919–1929", "Georg Lukács", "马克思与批判理论", "marxism"),
+    "negative-dialectics": ("Negative Dialectics", "Theodor W. Adorno", "马克思与批判理论", "marxism"),
+    "against-epistemology": ("Against Epistemology: A Metacritique", "Theodor W. Adorno", "马克思与批判理论", "marxism"),
+    "the-jargon-of-authenticity": ("The Jargon of Authenticity", "Theodor W. Adorno", "马克思与批判理论", "marxism"),
+    "dialectic-of-enlightenment": ("Dialectic of Enlightenment", "Max Horkheimer & Theodor W. Adorno", "马克思与批判理论", "marxism"),
+    "one-dimensional-man": ("One-Dimensional Man", "Herbert Marcuse", "马克思与批判理论", "marxism"),
+    "aesthetics-and-politics": ("Aesthetics and Politics", "Adorno, Benjamin, Bloch, Brecht & Lukács", "马克思与批判理论", "marxism"),
+    "reading-capital": ("Reading Capital", "Louis Althusser & Étienne Balibar", "马克思与批判理论", "marxism"),
+    "lenin-and-philosophy-and-other-essays": ("Lenin and Philosophy and Other Essays", "Louis Althusser", "马克思与批判理论", "marxism"),
+    "writings-for-a-liberation-psychology": ("Writings for a Liberation Psychology", "Ignacio Martín-Baró", "马克思与批判理论", "marxism"),
+    "de-ideologization-liberation-psychology": ("De-ideologization: Liberation Psychology and Contradiction", "Nick Malherbe", "马克思与批判理论", "marxism"),
+    "the-de-ideologization-crisis-in-philosophy": ("The De-Ideologization Crisis in Philosophy", "N. S. Iulina", "马克思与批判理论", "marxism"),
+
+    # 5. 现象学与存在哲学 (phenomenology)
+    "history-of-the-concept-of-time": ("History of the Concept of Time: Prolegomena", "Martin Heidegger", "现象学与存在哲学", "phenomenology"),
+
+    # 6. 精神分析与后现代 (postmodern)
+    "anxiety-the-seminar-of-jacques-lacan-book-x": ("Anxiety: The Seminar of Jacques Lacan, Book X", "Jacques Lacan", "精神分析与后现代", "postmodern"),
+    "the-four-fundamental-concepts-of-psychoanalysis": ("The Four Fundamental Concepts of Psychoanalysis", "Jacques Lacan", "精神分析与后现代", "postmodern"),
+    "on-feminine-sexuality-encore": ("On Feminine Sexuality: The Seminar of Jacques Lacan, Book XX (Encore)", "Jacques Lacan", "精神分析与后现代", "postmodern"),
+    "the-lacanian-subject": ("The Lacanian Subject: Between Language and Jouissance", "Bruce Fink", "精神分析与后现代", "postmodern"),
+    "the-practice-of-lacanian-psychoanalysis-theories-and-principles": ("The Practice of Lacanian Psychoanalysis", "Raul Moncayo", "精神分析与后现代", "postmodern"),
+    "how-to-read-lacan": ("How to Read Lacan", "Slavoj Žižek", "精神分析与后现代", "postmodern"),
+    "for-they-know-not-what-they-do": ("For They Know Not What They Do: Enjoyment as a Political Factor", "Slavoj Žižek", "精神分析与后现代", "postmodern"),
+    "tarrying-with-the-negative": ("Tarrying with the Negative: Kant, Hegel, and the Critique of Ideology", "Slavoj Žižek", "精神分析与后现代", "postmodern"),
+    "writing-and-difference": ("Writing and Difference", "Jacques Derrida", "精神分析与后现代", "postmodern"),
+    "jacques-lacan-between-psychoanalysis-and-politics": ("Jacques Lacan: Between Psychoanalysis and Politics", "Samo Tomšič & Andreja Zevnik (eds.)", "精神分析与后现代", "postmodern"),
+    "there-s-no-such-thing-as-a-sexual-relationship": ("There's No Such Thing as a Sexual Relationship", "Alain Badiou & Barbara Cassin", "精神分析与后现代", "postmodern"),
+    "simulacra-and-simulation": ("Simulacra and Simulation", "Jean Baudrillard", "精神分析与后现代", "postmodern"),
+    "symbolic-exchange-and-death": ("Symbolic Exchange and Death", "Jean Baudrillard", "精神分析与后现代", "postmodern"),
+    "the-consumer-society-myths-and-structures": ("The Consumer Society: Myths and Structures", "Jean Baudrillard", "精神分析与后现代", "postmodern"),
+    "jean-baudrillard-selected-writings": ("Jean Baudrillard: Selected Writings", "Jean Baudrillard", "精神分析与后现代", "postmodern"),
+    "introducing-baudrillard-a-graphic-guide": ("Introducing Baudrillard: A Graphic Guide", "Chris Horrocks & Zoran Jevtic", "精神分析与后现代", "postmodern"),
+
+    # 7. 辞典与通识百科 (reference)
+    "a-hegel-dictionary": ("A Hegel Dictionary", "Michael Inwood", "辞典与通识百科", "reference"),
+    "the-kant-dictionary": ("The Kant Dictionary", "Lucas Thorpe", "辞典与通识百科", "reference"),
+    "kant-lexikon": ("Kant-Lexikon", "Willaschek, Stolzenberg, Mohr & Schierbaum (eds.)", "辞典与通识百科", "reference"),
+    "simply-philosophy": ("Simply Philosophy", "DK Publishing", "辞典与通识百科", "reference"),
+    "nature-encyclopedia": ("Nature Encyclopedia", "DK Publishing", "辞典与通识百科", "reference"),
 }
 
 CORE_PHILOSOPHY_GLOSSARY = [
@@ -177,18 +274,25 @@ CORE_PHILOSOPHY_GLOSSARY = [
 
 COVER_PALETTES = {
     "古希腊与近代哲思": ["bronze-ivory", "prussian-navy", "slate-ochre", "forest-brass"],
+    "古希腊与近代原典": ["bronze-ivory", "prussian-navy", "slate-ochre", "forest-brass"],
     "德国古典原典": ["obsidian-gold", "prussian-navy", "forest-brass", "burgundy-ivory", "slate-ochre"],
+    "康德·费希特与谢林": ["obsidian-gold", "forest-brass", "burgundy-ivory", "slate-ochre", "prussian-navy"],
+    "黑格尔原典与研究": ["prussian-navy", "obsidian-gold", "burgundy-ivory", "slate-ochre", "forest-brass"],
     "马克思与批判理论": ["crimson-ink", "terracotta-charcoal", "rust-parchment", "iron-amber"],
     "现象学与存在哲学": ["teal-obsidian", "cobalt-cream", "obsidian-gold", "slate-ochre"],
     "精神分析与后现代": ["indigo-silver", "plum-sand", "teal-obsidian", "cobalt-cream"],
     "张世英哲学全书": ["celadon-ink", "vermilion-paper", "forest-brass", "bronze-ivory"],
     "辞典与术语工具": ["emerald-gold", "bronze-ivory"],
+    "辞典与通识百科": ["emerald-gold", "bronze-ivory", "teal-obsidian", "celadon-ink"],
 }
 
 MAX_CHAPTER_CHARS = 28000
-# 个别“文集/笔记”类书以整篇作品为章，H3 只是作品内部小节；不要按普通章节切碎。
+EN_MAX_CHAPTER_CHARS = 65000
+# 个别“文集/笔记/大型辞典”类书按合理篇幅分章，避免切碎或爆炸
 BOOK_MAX_CHAPTER_CHARS = {
     "列宁哲学笔记（全集第38卷）": 100000,
+    "Kant-Lexikon": 180000,
+    "The Complete Works of John Locke": 95000,
 }
 CHUNK_TARGET_CHARS = 65000
 
@@ -425,13 +529,21 @@ FALSE_HEADING_PROSE_RE = re.compile(
 )
 
 
-def is_valid_heading_text(t: str) -> bool:
+def is_valid_heading_text(t: str, lang: str = "zh") -> bool:
     """严格判别是否为真实章节标题，将误识为标题的叙述句碎片自动降级为正文段落。"""
     s = t.strip()
     if not s or PAGE_NUM_LINE_RE.match(s):
         return False
     if FALSE_HEADING_PROSE_RE.match(s):
         return False
+    if lang == "en":
+        if len(s) > 135:
+            return False
+        if len(s) > 55 and s.endswith((".", ",", ";")) and not re.match(r'^(?:Chapter|Section|Book|Part|\d+\.)', s, re.I):
+            return False
+        if re.search(r'([·…\.]{3,}\s*\d*\s*$)', s):
+            return False
+        return True
     # 以 "1." / "2." / "I." 开头的长叙述句（如《小逻辑》误标为 # 的正文列举句）降级为正文
     if re.match(r'^(?:\d+|[IVX]+)\.\s*', s) and (
         len(s) >= 30
@@ -452,9 +564,17 @@ def is_valid_heading_text(t: str) -> bool:
     return True
 
 
-def format_clean_title(raw: str) -> str:
+def format_clean_title(raw: str, lang: str = "zh") -> str:
     """规范化章节目录标题：清除上标角标、尾部页码、多余句号、OCR 破折号与多余截断。"""
     s = clean_preview(raw)
+    if lang == "en":
+        s = re.sub(r'[⁰¹²³⁴⁵⁶⁷⁸⁹①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳]+', '', s)
+        s = re.sub(r'\s+', ' ', s).strip().rstrip(',;')
+        if len(s) > 120:
+            window = s[:120]
+            cut = window.rfind(' ')
+            s = (window[:cut] if cut >= 50 else window[:114]).rstrip(' ·—-:,;(') + '…'
+        return s or "Section"
     # 清除 Unicode 上标数字、康德英译编者注字母（ᵃᵇᶜ）、圆圈注码（①②…）、尾部孤立注释字母（如 "经验的类比c，"）与孤立 <
     s = re.sub(r'[⁰¹²³⁴⁵⁶⁷⁸⁹ᵃᵇᶜᵈᵉᶠ①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳]+', '', s)
     s = re.sub(r'([a-z])[,，]\s*$', '', s)
@@ -566,7 +686,7 @@ def is_prunable_non_body_chapter(title: str, blocks: list, is_reference_book: bo
     return False
 
 
-def parse_markdown_to_blocks(md_text: str) -> list:
+def parse_markdown_to_blocks(md_text: str, lang: str = "zh") -> list:
     md_text = sanitize_book_text(md_text)
     # Consecutive GitHub-style footnote definitions ([^1]: ... [^2]: ...)
     # are often written without blank lines. Split them so each definition
@@ -600,13 +720,14 @@ def parse_markdown_to_blocks(md_text: str) -> list:
         m_h = re.match(r'^(#{1,6})\s+(.+)$', stripped)
         if m_h:
             lvl = len(m_h.group(1))
-            t = _tidy_cjk_spacing(_fix_unmatched_bold(re.sub(r'\s+#+$', '', m_h.group(2).strip())))
+            raw_h = _fix_unmatched_bold(re.sub(r'\s+#+$', '', m_h.group(2).strip()))
+            t = raw_h.strip() if lang == "en" else _tidy_cjk_spacing(raw_h)
             if not t or PAGE_NUM_LINE_RE.match(t):
                 i += 1
                 continue
-            if re.search(r'([·…\.]{3,}\s*\d*\s*$|/\s*\d{1,3}\s*$|（\d{1,3}）\s*$|\(\d{1,3}\)\s*$)', t):
+            if lang == "zh" and re.search(r'([·…\.]{3,}\s*\d*\s*$|/\s*\d{1,3}\s*$|（\d{1,3}）\s*$|\(\d{1,3}\)\s*$)', t):
                 blocks.append({"y": "l", "t": t})
-            elif not is_valid_heading_text(t):
+            elif not is_valid_heading_text(t, lang=lang):
                 # 误识为标题的叙述句碎片安全降级为正文段落，既不丢字也不污染目录！
                 blocks.append({"y": "p", "t": t})
             else:
@@ -716,7 +837,7 @@ def parse_markdown_to_blocks(md_text: str) -> list:
                 ol_counter = 0
                 ol_active = False
 
-    return heal_broken_paragraphs(blocks)
+    return heal_broken_paragraphs(blocks, lang=lang)
 
 
 NO_MERGE_START_RE = re.compile(
@@ -776,10 +897,46 @@ def _is_mid_sentence_break(a: str, b: str) -> bool:
     return False
 
 
-def heal_broken_paragraphs(blocks: list) -> list:
+def _heal_english_paragraphs(blocks: list) -> list:
+    """英文原典温和断行修复：仅合并明显断词连字符或句中无标点且下段小写续接的 PDF 折行，绝不误并正常英文段落。"""
+    if not blocks:
+        return blocks
+    out = []
+    for blk in blocks:
+        if blk.get("y") != "p":
+            out.append(blk)
+            continue
+        cur_t = (blk.get("t") or "").strip()
+        if not cur_t:
+            continue
+        if out and out[-1].get("y") == "p":
+            prev_t = out[-1]["t"].strip()
+            # 1) 断词连字符（word- + continuation）
+            if prev_t.endswith("-") and len(prev_t) >= 3 and prev_t[-2].isalpha() and cur_t[0].islower():
+                out[-1]["t"] = _fix_unmatched_bold(prev_t[:-1] + cur_t)
+                continue
+            # 2) 上段以普通字母/逗号结尾（非句末标点）且下段以小写字母开头，且上段非极短标题行
+            if (
+                len(prev_t) >= 45
+                and prev_t[-1] not in '.!?:;”"\'’)]—–'
+                and (prev_t[-1].isalpha() or prev_t[-1] == ',')
+                and cur_t[0].islower()
+            ):
+                out[-1]["t"] = _fix_unmatched_bold(prev_t + " " + cur_t)
+                continue
+        nb = {"y": "p", "t": cur_t}
+        if blk.get("f"):
+            nb["f"] = list(blk["f"])
+        out.append(nb)
+    return out
+
+
+def heal_broken_paragraphs(blocks: list, lang: str = "zh") -> list:
     """修复全库因 PDF/OCR 按视觉行宽插入空行导致的句中断裂与阶梯缩进问题（零丢字，完整保留并重映注脚）。"""
     if not blocks:
         return blocks
+    if lang == "en":
+        return _heal_english_paragraphs(blocks)
     # 预处理：若某段正文 p 在句中未完结处被一个浮动小标题 h 切断，且 h 紧随的下一段 p 恰好是该句的后半截，
     # 则先将该句后半截归还到前段，再放置小标题 h（同时将“注释里面已经指出……”这类伪标题还原为 p）
     blocks = [dict(b) for b in blocks]
@@ -961,14 +1118,16 @@ def _strip_runin_titles(blocks: list) -> list:
     return out
 
 
-def split_blocks_into_chapters(all_blocks: list, book_title: str, is_reference_book: bool = False) -> list:
+def split_blocks_into_chapters(all_blocks: list, book_title: str, is_reference_book: bool = False, lang: str = "zh") -> list:
     if not all_blocks:
-        return [{"title": "正文", "level": 1, "blocks": []}]
+        return [{"title": "Text" if lang == "en" else "正文", "level": 1, "blocks": []}]
 
-    all_blocks = inject_foreign_glosses(all_blocks, is_reference_book=is_reference_book)
+    if lang != "en":
+        all_blocks = inject_foreign_glosses(all_blocks, is_reference_book=is_reference_book)
     all_blocks = _drop_boilerplate_blocks(all_blocks)
     all_blocks = _merge_orphan_punctuation(all_blocks)
-    all_blocks = _strip_runin_titles(all_blocks)
+    if lang != "en":
+        all_blocks = _strip_runin_titles(all_blocks)
     keep_index = book_title in ("哲学史讲演录", "列宁哲学笔记（全集第38卷）")
 
     # 清除特定德文原版全集边码/书页夹码 `[16]` / `**[17]**` / `[3]`（《大逻辑》《小逻辑》《神话哲学》，不影响别书 `[n]` 脚注）
@@ -1236,7 +1395,7 @@ def split_blocks_into_chapters(all_blocks: list, book_title: str, is_reference_b
         return out
 
     raw_chapters = []
-    cur_title = "序言与导读"
+    cur_title = "Introduction" if lang == "en" else "序言与导读"
     cur_level = 1
     cur_blocks = []
 
@@ -1246,7 +1405,7 @@ def split_blocks_into_chapters(all_blocks: list, book_title: str, is_reference_b
             if re.sub(r'[\s　·\-—:：()（）\[\]【】\d]', '', b["t"]) in ("注释", "说明", "附释", "备注"):
                 is_split_h = False
         if is_split_h:
-            new_title = format_clean_title(b["t"])
+            new_title = format_clean_title(b["t"], lang=lang)
             # 若与上一章标题实质相同（页眉重复，含短页眉如 "第一篇"/"P"/"S" 或尾带 *），直接并入上一章而不是再拆出假章
             norm_new = re.sub(r'[\s\*＊·：:]+', '', new_title)
             norm_cur = re.sub(r'[\s\*＊·：:]+', '', cur_title)
@@ -1385,18 +1544,23 @@ def split_blocks_into_chapters(all_blocks: list, book_title: str, is_reference_b
     merged = coalesced_merged
 
     # 构建期全书级注脚与【译注】结构化收纳（在切分（续 N）之前执行，支持跨节/跨“注释”章精确配对！）
-    merged, fn_st = fold_cross_chapter_notes(merged, is_reference_book=is_reference_book)
-    for k in TOTAL_FN_STATS:
-        TOTAL_FN_STATS[k] += fn_st.get(k, 0)
-    # 注脚从句间抽离后，二次愈合因页底脚注穿插而断裂的跨页句段（自动重映射 ⟦fn:N⟧ 索引）
-    for ch in merged:
-        ch["blocks"] = heal_broken_paragraphs(ch["blocks"])
+    if lang != "en":
+        merged, fn_st = fold_cross_chapter_notes(merged, is_reference_book=is_reference_book)
+        for k in TOTAL_FN_STATS:
+            TOTAL_FN_STATS[k] += fn_st.get(k, 0)
+        # 注脚从句间抽离后，二次愈合因页底脚注穿插而断裂的跨页句段（自动重映射 ⟦fn:N⟧ 索引）
+        for ch in merged:
+            ch["blocks"] = heal_broken_paragraphs(ch["blocks"], lang=lang)
 
-    # 针对碎片化极短微章过多的非辞典书（如《导读鲍德里亚》3.6万字被拆成107个300字碎片），按阅读节奏归并微章为自然节群（保留全部小标题零丢字）
-    if not is_reference_book and len(merged) >= 45:
+    # 针对碎片化极短微章过多的非辞典书（如《导读鲍德里亚》/ Simply Philosophy），按阅读节奏归并微章为自然节群（保留全部小标题零丢字）
+    micro_med_cap = 1600 if lang == "en" else 650
+    micro_group_min = 4200 if lang == "en" else 2200
+    micro_group_max = 7500 if lang == "en" else 3600
+    micro_single_max = 3200 if lang == "en" else 1600
+    if (not is_reference_book or book_title in ("Simply Philosophy", "Nature Encyclopedia")) and len(merged) >= 45:
         ch_lens = sorted(sum(len(b["t"]) for b in c["blocks"]) for c in merged)
         median_len = ch_lens[len(ch_lens) // 2]
-        if median_len < 650:
+        if median_len < micro_med_cap:
             grouped = []
             cur_g = None
             cur_g_len = 0
@@ -1405,7 +1569,7 @@ def split_blocks_into_chapters(all_blocks: list, book_title: str, is_reference_b
                 if cur_g is None:
                     cur_g = {"title": ch["title"], "level": ch["level"], "blocks": list(ch["blocks"])}
                     cur_g_len = cl
-                elif cur_g_len < 2200 and cur_g_len + cl <= 3600 and cl < 1600:
+                elif cur_g_len < micro_group_min and cur_g_len + cl <= micro_group_max and cl < micro_single_max:
                     # 将被归并微章的首标题降级为章内三级小标题保留
                     sub_blks = []
                     for bi_s, blk_s in enumerate(ch["blocks"]):
@@ -1535,10 +1699,14 @@ def split_blocks_into_chapters(all_blocks: list, book_title: str, is_reference_b
         if pre_counts.get(k, 0) > 1 and not re.search(r'[（(][一二三四五六七八九十\d]+[）)]$', c["title"]):
             pre_seen[k] = pre_seen.get(k, 0) + 1
             pn = pre_seen[k]
-            lbl = _pre_cn[pn - 1] if pn <= len(_pre_cn) else str(pn)
-            c["title"] = f"{c['title']}（{lbl}）"
+            if lang == "en":
+                c["title"] = f"{c['title']} ({pn})"
+            else:
+                lbl = _pre_cn[pn - 1] if pn <= len(_pre_cn) else str(pn)
+                c["title"] = f"{c['title']}（{lbl}）"
 
-    book_max = BOOK_MAX_CHAPTER_CHARS.get(book_title, MAX_CHAPTER_CHARS)
+    default_max = EN_MAX_CHAPTER_CHARS if lang == "en" else MAX_CHAPTER_CHARS
+    book_max = BOOK_MAX_CHAPTER_CHARS.get(book_title, default_max)
     split_final = []
     for ch in final_chapters:
         ch_chars = sum(len(b["t"]) for b in ch["blocks"])
@@ -1558,11 +1726,11 @@ def split_blocks_into_chapters(all_blocks: list, book_title: str, is_reference_b
             bt_s = b["t"].strip()
             is_non_split_sub = bool(re.match(r'^[\[\(（【]?(?:附释|说明|注释|补遗|备注|译者注)', bt_s))
             is_micro_sec = bool(re.match(r'^(?:§\s*\d+|第\s*\d+\s*节)', bt_s))
-            is_sub_heading = b["y"] == "h" and b.get("l", 1) >= 3 and not is_non_split_sub and is_valid_heading_text(bt_s)
-            min_split_chars = 10000 if is_micro_sec else 3500
-            if is_sub_heading and cur_sub_chars >= min_split_chars:
+            is_sub_heading = b["y"] == "h" and b.get("l", 1) >= 3 and not is_non_split_sub and is_valid_heading_text(bt_s, lang=lang)
+            min_split_chars = (24000 if lang == "en" else 10000) if is_micro_sec else (12000 if lang == "en" else 3500)
+            if is_sub_heading and cur_sub_chars >= min_split_chars and not (book_title == "Kant-Lexikon"):
                 sub_parts.append({"title": cur_sub_title, "level": min(ch["level"] + 1, 3), "blocks": cur_sub_blocks})
-                sub_clean = format_clean_title(bt_s)
+                sub_clean = format_clean_title(bt_s, lang=lang)
                 cur_sub_title = sub_clean if len(sub_clean) >= 6 else f"{base_title} · {sub_clean}"
                 cur_sub_blocks = [b]
                 cur_sub_chars = blen
@@ -1570,8 +1738,12 @@ def split_blocks_into_chapters(all_blocks: list, book_title: str, is_reference_b
             elif cur_sub_chars + blen > book_max and cur_sub_blocks:
                 sub_parts.append({"title": cur_sub_title, "level": ch["level"], "blocks": cur_sub_blocks})
                 part_num += 1
-                clean_parent = re.sub(r'（续\s*\d+）$', '', cur_sub_title)
-                cur_sub_title = f"{clean_parent}（续 {part_num}）"
+                if lang == "en":
+                    clean_parent = re.sub(r'\s*\(Part\s*\d+\)$', '', cur_sub_title)
+                    cur_sub_title = f"{clean_parent} (Part {part_num})"
+                else:
+                    clean_parent = re.sub(r'（续\s*\d+）$', '', cur_sub_title)
+                    cur_sub_title = f"{clean_parent}（续 {part_num}）"
                 cur_sub_blocks = [b]
                 cur_sub_chars = blen
             else:
@@ -1717,8 +1889,11 @@ def split_blocks_into_chapters(all_blocks: list, book_title: str, is_reference_b
         if counts.get(k, 0) > 1:
             seen[k] = seen.get(k, 0) + 1
             n = seen[k]
-            label = cn_num[n - 1] if n <= len(cn_num) else str(n)
-            c["title"] = f"{c['title']}（{label}）"
+            if lang == "en":
+                c["title"] = f"{c['title']} ({n})"
+            else:
+                label = cn_num[n - 1] if n <= len(cn_num) else str(n)
+                c["title"] = f"{c['title']}（{label}）"
 
     # Drop a "卷首导言" chapter that is only copyright/CIP/publisher boilerplate.
     def _copyright_only(c):
@@ -1779,6 +1954,10 @@ def split_blocks_into_chapters(all_blocks: list, book_title: str, is_reference_b
                     note_text = defs[label]
                     if re.match(r"^[eu]\d*-\d+$", label, re.I):
                         ui_label = "编者注" if "编者注" in note_text else ("译注" if "译者" in note_text or "译注" in note_text else f"注{label.split('-')[-1]}")
+                    elif re.match(r"^c\d+-(\d+)$", label, re.I):
+                        ui_label = label.split("-")[-1]
+                    elif re.match(r"^s-(\d+)$", label, re.I):
+                        ui_label = "*" * min(3, int(label.split("-")[-1]))
                     else:
                         ui_label = label
                     fns.append({"l": ui_label, "k": "fn", "t": note_text})
@@ -1800,17 +1979,27 @@ def split_blocks_into_chapters(all_blocks: list, book_title: str, is_reference_b
         return re.sub(r"\[\^[^\]]{0,16}\]", "", cleaned)
 
     final_chapters = _fold_dashed_endnotes(final_chapters)
+    final_chapters = [c for c in final_chapters if any((b.get("t") or "").strip() for b in c.get("blocks", []))]
 
     def _split_oversized_narrative_p(blk: dict, max_len: int = 1950, target_len: int = 1050) -> list:
         t = blk.get("t") or ""
+        if lang == "en":
+            max_len = 3600
+            target_len = 2000
         if blk.get("y") != "p" or len(t) <= max_len:
             return [blk]
         old_fns = blk.get("f") or []
         # Candidate split positions: right after sentence-ending punctuation + any attached closing quote/bracket + any ⟦fn:k⟧ tokens
-        sent_ends = [
-            m.end()
-            for m in re.finditer(r"(?:[。！？!?](?:[”’」』）\)】])?)(?:\s*⟦fn:\d+⟧)*", t)
-        ]
+        if lang == "en":
+            sent_ends = [
+                m.end()
+                for m in re.finditer(r'(?:[.!?](?:["”’\')\]])?)\s+', t)
+            ]
+        else:
+            sent_ends = [
+                m.end()
+                for m in re.finditer(r"(?:[。！？!?](?:[”’」』）\)】])?)(?:\s*⟦fn:\d+⟧)*", t)
+            ]
         pieces = []
         start = 0
         while len(t) - start > max_len:
@@ -1872,8 +2061,8 @@ def split_blocks_into_chapters(all_blocks: list, book_title: str, is_reference_b
                 continue
             b["t"] = bt
             kept_blks.append(b)
-        c["blocks"] = heal_broken_paragraphs(kept_blks)
-        is_idx_ch = any(k in c["title"] for k in ("索引", "目录", "术语表", "词汇表", "文献", "年表"))
+        c["blocks"] = heal_broken_paragraphs(kept_blks, lang=lang)
+        is_idx_ch = any(k in c["title"] for k in ("索引", "目录", "术语表", "词汇表", "文献", "年表", "Bibliography", "Index", "Glossary"))
         if not is_reference_book and not is_idx_ch:
             split_blks = []
             for b in c["blocks"]:
@@ -2145,6 +2334,17 @@ def main():
             seen_hashes.add(data_hash)
             sources.append((f, "new"))
 
+    # 4. 英文/外文原典书库 (english-books/*.md)
+    if ENGLISH_BOOKS_ROOT.exists():
+        for f in sorted(ENGLISH_BOOKS_ROOT.glob("*.md")):
+            if f.name.startswith("_") or f.name == "00-library-index.md" or f.stat().st_size < 1000:
+                continue
+            data_hash = hashlib.md5(f.read_bytes()).hexdigest()
+            if data_hash in seen_hashes:
+                continue
+            seen_hashes.add(data_hash)
+            sources.append((f, "en"))
+
     catalog = []
     search_index = []
     palette_counters = {}
@@ -2154,8 +2354,16 @@ def main():
         rel = str(src.relative_to(SOURCE_ROOT)) if origin == "main" else f"{origin}/{src.name}"
         stem = src.stem
         top_folder = src.relative_to(SOURCE_ROOT).parts[0] if origin == "main" else origin
+        lang = "en" if origin == "en" else "zh"
 
-        if stem in BOOK_META_OVERRIDES:
+        if lang == "en":
+            if stem in ENGLISH_BOOK_META:
+                title, author, category, station = ENGLISH_BOOK_META[stem]
+            else:
+                title = stem.replace("-", " ").title()
+                author = "Philosophy Archive"
+                category, station = "古希腊与近代原典", "classic"
+        elif stem in BOOK_META_OVERRIDES:
             title, author, category, station = BOOK_META_OVERRIDES[stem]
         else:
             title = stem
@@ -2171,20 +2379,23 @@ def main():
 
         book_id = make_book_id(rel)
         if src.suffix.lower() == ".md":
-            all_blocks = parse_markdown_to_blocks(src.read_text(encoding="utf-8", errors="replace"))
+            all_blocks = parse_markdown_to_blocks(src.read_text(encoding="utf-8", errors="replace"), lang=lang)
         else:
             all_blocks = parse_epub_to_blocks(src)
 
+        is_ref = category in ("辞典与术语工具", "辞典与通识百科")
         chapters = split_blocks_into_chapters(
             all_blocks,
             title,
-            is_reference_book=(category == "辞典与术语工具"),
+            is_reference_book=is_ref,
+            lang=lang,
         )
         book_dir = OUT_ROOT / "books" / book_id
         book_dir.mkdir(parents=True, exist_ok=True)
 
         chapter_metas = []
         total_chars = 0
+        total_words = 0
         lead_excerpt = ""
         first_body_chapter = None
 
@@ -2205,9 +2416,12 @@ def main():
             cur_chunk_data = {}
             cur_chunk_chars = 0
 
+        chunk_cap = 140000 if lang == "en" else CHUNK_TARGET_CHARS
         for ch_idx, ch in enumerate(chapters):
             ch_chars = sum(len(b["t"]) for b in ch["blocks"])
-            if cur_chunk_data and cur_chunk_chars + ch_chars > CHUNK_TARGET_CHARS:
+            if lang == "en":
+                total_words += sum(len(b["t"].split()) for b in ch["blocks"])
+            if cur_chunk_data and cur_chunk_chars + ch_chars > chunk_cap:
                 flush_chunk()
 
             front_flag = is_front_matter_chapter(ch["title"], ch["blocks"])
@@ -2268,22 +2482,29 @@ def main():
         palette = palettes[p_idx % len(palettes)]
         palette_counters[category] = p_idx + 1
 
+        est_read = max(1, round(total_words / 220)) if lang == "en" else max(1, round(total_chars / 420))
+        est_listen = max(1, round(total_words / 150)) if lang == "en" else max(1, round(total_chars / 230))
+        mono_m = re.search(r'[A-Za-z\u4e00-\u9fff]', title)
+        monogram = mono_m.group(0).upper() if mono_m else ("P" if lang == "en" else "哲")
+
         book_meta = {
             "id": book_id,
             "sourcePath": str(src),
             "title": title,
             "author": author,
             "category": category,
+            "lang": lang,
             "station": station,
             "sourceFormat": src.suffix.lower().lstrip("."),
             "charCount": total_chars,
+            "wordCount": total_words if lang == "en" else total_chars,
             "chapterCount": len(chapter_metas),
             "chunkCount": cur_chunk_idx,
-            "estReadMin": max(1, round(total_chars / 420)),
-            "estListenMin": max(1, round(total_chars / 230)),
+            "estReadMin": est_read,
+            "estListenMin": est_listen,
             "coverPalette": palette,
-            "monogram": title[0] if title else "哲",
-            "excerpt": lead_excerpt or f"收录于《{category}》典藏书系。",
+            "monogram": monogram,
+            "excerpt": lead_excerpt or (f"Collected in {category}." if lang == "en" else f"收录于《{category}》典藏书系。"),
             "firstBodyChapter": first_body_chapter,
             "chapters": chapter_metas,
         }
@@ -2296,19 +2517,23 @@ def main():
 
     cat_order = {
         "古希腊与近代哲思": 1,
+        "古希腊与近代原典": 1,
         "德国古典原典": 2,
-        "马克思与批判理论": 3,
-        "现象学与存在哲学": 4,
-        "精神分析与后现代": 5,
-        "张世英哲学全书": 6,
-        "辞典与术语工具": 7,
+        "康德·费希特与谢林": 2,
+        "黑格尔原典与研究": 3,
+        "马克思与批判理论": 4,
+        "现象学与存在哲学": 5,
+        "精神分析与后现代": 6,
+        "张世英哲学全书": 7,
+        "辞典与术语工具": 8,
+        "辞典与通识百科": 8,
     }
-    catalog.sort(key=lambda x: (cat_order.get(x["category"], 99), x["author"], x["title"]))
+    catalog.sort(key=lambda x: (0 if x.get("lang", "zh") == "zh" else 1, cat_order.get(x["category"], 99), x["author"], x["title"]))
 
     (OUT_ROOT / "catalog.json").write_text(
         json.dumps({
-            "version": 3,
-            "generatedAt": "2026-11-25",
+            "version": 4,
+            "generatedAt": "2026-11-27",
             "bookCount": len(catalog),
             "totalChars": sum(b["charCount"] for b in catalog),
             "books": catalog,
@@ -2328,7 +2553,7 @@ def main():
 
     # 自动从内置的《拉康术语译名表》和《康德辞典》抽取词条并绑定原书跳转定位
     for b in catalog:
-        if b["category"] != "辞典与术语工具":
+        if b.get("lang", "zh") != "zh" or b["category"] != "辞典与术语工具":
             continue
         bdir = OUT_ROOT / "books" / b["id"]
         meta = json.loads((bdir / "meta.json").read_text(encoding="utf-8"))

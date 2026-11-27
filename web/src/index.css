@@ -339,6 +339,54 @@ body,
   line-height: 1.7;
   color: var(--text-secondary);
 }
+
+/* 中英对照精排排版样式 */
+.bilingual-heading-sub {
+  font-family: Georgia, "Times New Roman", "LumenSerif", serif;
+  font-style: italic;
+  font-weight: 400;
+  font-size: 0.74em;
+  line-height: 1.48;
+  color: var(--text-secondary);
+  margin-top: 0.25em;
+  letter-spacing: 0.01em;
+}
+.bilingual-en-prose {
+  font-family: Georgia, "Times New Roman", "LumenSerif", serif;
+  font-size: 0.92em;
+  line-height: 1.66;
+  color: var(--text-secondary);
+  border-left: 2px solid var(--border-strong);
+  padding-left: 0.75em;
+  letter-spacing: 0.005em;
+}
+.bilingual-en-solo {
+  font-family: Georgia, "Times New Roman", "LumenSerif", serif;
+  line-height: 1.74;
+  color: var(--text);
+}
+.bilingual-zh-prose {
+  color: var(--text);
+  border-left: 2px solid var(--accent-soft);
+  padding-left: 0.75em;
+}
+.reader-prose blockquote.bilingual-quote-en {
+  font-family: Georgia, "Times New Roman", "LumenSerif", serif;
+  font-size: 0.92em;
+  font-style: italic;
+  line-height: 1.64;
+  color: var(--text-secondary);
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  padding-bottom: 0.55em;
+}
+.reader-prose blockquote.bilingual-quote-zh {
+  color: var(--text);
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  padding-top: 0.55em;
+  border-top: 1px dashed var(--border);
+}
 .user-hl-note-dot {
   display: inline-flex;
   align-items: center;

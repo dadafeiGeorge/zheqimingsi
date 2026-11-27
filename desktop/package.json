@@ -1,7 +1,7 @@
 {
   "name": "zheqimingsi-desktop",
-  "version": "2.0.0",
-  "description": "哲启明思 · 哲学典藏阅读器与微软神经网络电台（Windows 桌面端）",
+  "version": "1.2.0",
+  "description": "哲启明思 v1.2.0 (2026.11.27) · 哲学典藏阅读器与微软神经网络电台（Windows 桌面端）",
   "main": "main.mjs",
   "type": "module",
   "scripts": {

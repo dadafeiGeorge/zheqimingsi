@@ -76,14 +76,37 @@ export interface AiConversation {
   updatedAt: number
 }
 
+export type BookLang = 'zh' | 'en'
+export type CollectionZone = 'zh' | 'en' | 'all'
+
+export interface UserCollection {
+  id: string
+  name: string
+  zone: CollectionZone
+  bookIds: string[]
+  createdAt: number
+  updatedAt: number
+}
+
+export interface BookOverride {
+  category?: string
+  lang?: BookLang
+  title?: string
+  author?: string
+}
+
 export interface BookCatalogItem {
   id: string
   title: string
+  subtitle?: string
   author: string
   category: string
+  lang?: BookLang
+  bilingual?: 'sentence' | 'paragraph'
   station: 'classic' | 'german' | 'marxism' | 'phenomenology' | 'postmodern' | 'chinese' | 'reference'
   sourceFormat: string
   charCount: number
+  wordCount?: number
   chapterCount: number
   chunkCount: number
   estReadMin: number
@@ -99,6 +122,7 @@ export interface ChapterMeta {
   index: number
   chunk: number
   title: string
+  subtitle?: string
   level: number
   charCount: number
   blockCount: number
@@ -119,6 +143,8 @@ export interface RawFootnote {
 export interface RawBlock {
   y: 'h' | 'p' | 'q' | 'l' | 't' | 'r'
   l?: number
+  m?: 'en' | 'zh'
+  s?: string
   t: string
   f?: RawFootnote[]
 }
@@ -135,8 +161,11 @@ export interface ContentBlock {
   index: number
   type: 'heading' | 'paragraph' | 'quote' | 'list' | 'table' | 'hr'
   level?: number
+  langRole?: 'en' | 'zh'
   text: string
   html: string
+  subText?: string
+  subHtml?: string
   speakText: string
   footnotes?: ContentFootnote[]
 }
@@ -145,6 +174,7 @@ export interface ChapterContent {
   bookId: string
   chapterIndex: number
   title: string
+  subtitle?: string
   level: number
   blocks: ContentBlock[]
 }

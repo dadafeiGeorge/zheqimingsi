@@ -383,7 +383,10 @@ function startLocalServer(webDir, libraryDir, cacheDir, onRevealWindow) {
       }
 
       if (pathname === '/api/health') {
-        const body = Buffer.from(JSON.stringify({ ok: true, app: '哲启明思' }), 'utf8')
+        const body = Buffer.from(
+          JSON.stringify({ ok: true, app: '哲启明思', version: '1.2.0', buildDate: '2026.11.27' }),
+          'utf8'
+        )
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Content-Length': body.length })
         res.end(body)
         return
@@ -576,7 +579,7 @@ function setupSystemTray(iconPath) {
   try {
     const icon = fs.existsSync(iconPath) ? nativeImage.createFromPath(iconPath) : nativeImage.createEmpty()
     tray = new Tray(icon)
-    tray.setToolTip('哲启明思 · 哲学典藏阅读与微软电台')
+    tray.setToolTip('哲启明思 v1.2.0 (2026.11.27) · 哲学典藏阅读与微软电台')
     const showMainWindow = () => revealMainWindow()
     const menu = Menu.buildFromTemplate([
       { label: '显示哲启明思窗口', click: showMainWindow },
@@ -621,7 +624,7 @@ function createMainWindow() {
     minHeight: 600,
     frame: false,
     show: false,
-    title: '哲启明思 · 哲学典藏阅读与电台',
+    title: '哲启明思 v1.2.0 (2026.11.27) · 哲学典藏阅读与电台',
     icon: cachedIconPath && fs.existsSync(cachedIconPath) ? cachedIconPath : undefined,
     backgroundColor: readSavedThemeBg(),
     webPreferences: {

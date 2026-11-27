@@ -87,9 +87,12 @@ export const TitleBar: React.FC<TitleBarProps> = ({
         backdropFilter: 'blur(16px)',
       }}
     >
-      <div className="h-12 md:h-13 px-3 md:px-5 flex items-center justify-between gap-2">
+      <div className="h-11 md:h-13 px-3 md:px-5 flex items-center justify-between gap-2">
         {/* 品牌徽标 */}
-        <div className="flex items-center gap-2.5 titlebar-no-drag">
+        <div
+          className="flex items-center gap-2.5 titlebar-no-drag"
+          title="哲启明思 v1.2.0 (2026.11.27)"
+        >
           <div
             className="w-7 h-7 rounded-lg flex items-center justify-center font-serif font-bold text-sm shadow-sm border border-white/25"
             style={{
@@ -107,6 +110,12 @@ export const TitleBar: React.FC<TitleBarProps> = ({
                 style={{ backgroundColor: 'var(--accent-soft)', color: 'var(--accent)' }}
               >
                 PHILO FM
+              </span>
+              <span
+                className="hidden lg:inline text-[10px] font-mono opacity-65"
+                style={{ color: 'var(--text-muted)' }}
+              >
+                v1.2.0
               </span>
             </div>
           </div>

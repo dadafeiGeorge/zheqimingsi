@@ -6,7 +6,9 @@ interface BookCoverProps {
   category: string
   palette: string
   monogram?: string
-  size?: 'xs' | 'sm' | 'md' | 'lg'
+  lang?: 'zh' | 'en'
+  bilingual?: 'sentence' | 'paragraph'
+  size?: 'xxs' | 'xs' | 'sm' | 'md' | 'lg'
   className?: string
 }
 
@@ -121,20 +123,26 @@ export const BookCover: React.FC<BookCoverProps> = ({
   category,
   palette,
   monogram,
+  lang = 'zh',
+  bilingual,
   size = 'md',
   className = '',
 }) => {
   const style = PALETTE_STYLES[palette] || PALETTE_STYLES['obsidian-gold']
+  const isEn = lang === 'en'
   const sizeCls =
-    size === 'xs'
-      ? 'w-[70px] h-[98px] sm:w-[78px] sm:h-[108px] rounded-lg'
+    size === 'xxs'
+      ? 'w-10 h-[56px] rounded-md'
+      : size === 'xs'
+      ? 'w-[58px] h-[82px] sm:w-[74px] sm:h-[104px] rounded-lg'
       : size === 'sm'
       ? 'w-16 h-[88px] rounded-lg'
       : size === 'lg'
       ? 'w-44 h-60 rounded-xl'
       : 'w-full aspect-[3/4.2] rounded-xl'
 
-  const compact = size === 'xs' || size === 'sm'
+  const mini = size === 'xxs'
+  const compact = size === 'xxs' || size === 'xs' || size === 'sm'
 
   return (
     <div
@@ -145,7 +153,7 @@ export const BookCover: React.FC<BookCoverProps> = ({
       <div
         className="absolute inset-y-0 left-0"
         style={{
-          width: compact ? '6px' : '10px',
+          width: mini ? '4px' : compact ? '6px' : '10px',
           background: `linear-gradient(90deg, ${style.spine} 0%, rgba(255,255,255,0.14) 72%, rgba(0,0,0,0.28) 100%)`,
         }}
       />
@@ -153,7 +161,7 @@ export const BookCover: React.FC<BookCoverProps> = ({
       {/* 精致鎏金内框 */}
       <div
         className={`absolute rounded-sm pointer-events-none ${
-          compact ? 'inset-1.5 left-2.5' : 'inset-2.5 left-4'
+          mini ? 'inset-1 left-1.5' : compact ? 'inset-1.5 left-2.5' : 'inset-2.5 left-4'
         }`}
         style={{ border: `1px solid ${style.accent}${compact ? '33' : '44'}` }}
       />
@@ -162,26 +170,58 @@ export const BookCover: React.FC<BookCoverProps> = ({
       <div
         className="absolute -right-2 -bottom-3 font-serif font-bold pointer-events-none leading-none"
         style={{
-          fontSize: compact ? '2.5rem' : size === 'lg' ? '6.2rem' : '4.8rem',
+          fontSize: mini ? '1.6rem' : compact ? '2.3rem' : size === 'lg' ? '6.2rem' : '4.8rem',
           color: `${style.accent}18`,
         }}
       >
-        {monogram || title[0] || '哲'}
+        {monogram || title[0] || (isEn ? 'P' : '哲')}
       </div>
 
       {/* 书封内容 */}
-      {compact ? (
+      {mini ? (
+        <div className="relative h-full flex flex-col justify-between py-1.5 pl-2 pr-1 text-left">
+          <span className="w-2.5 h-[1px] opacity-75 shrink-0" style={{ backgroundColor: style.accent }} />
+          <span
+            className="font-serif font-bold text-[8.5px] leading-[1.18] line-clamp-3 break-words"
+            style={{ color: style.text }}
+          >
+            {title}
+          </span>
+        </div>
+      ) : compact ? (
         <div className="relative h-full flex flex-col justify-between py-2 pl-3 pr-1.5 text-left">
           <div className="flex items-center justify-between gap-1">
             <span
               className="w-3.5 h-[1.5px] opacity-75 shrink-0"
               style={{ backgroundColor: style.accent }}
             />
-            <span className="w-1 h-1 rounded-full shrink-0" style={{ backgroundColor: style.accent }} />
+            {isEn ? (
+              <span
+                className="text-[7px] font-mono font-bold tracking-wider px-1 rounded-sm"
+                style={{ backgroundColor: `${style.accent}24`, color: style.accent }}
+              >
+                EN
+              </span>
+            ) : bilingual ? (
+              <span
+                className="text-[7px] font-bold tracking-wider px-1 rounded-sm"
+                style={{ backgroundColor: `${style.accent}2c`, color: style.accent }}
+              >
+                双语
+              </span>
+            ) : (
+              <span className="w-1 h-1 rounded-full shrink-0" style={{ backgroundColor: style.accent }} />
+            )}
           </div>
           <span
-            className={`font-serif font-bold leading-[1.28] tracking-tight break-words ${
-              size === 'xs' ? 'text-[10.5px] sm:text-[11px] line-clamp-4' : 'text-[10px] line-clamp-3'
+            className={`font-serif font-bold leading-[1.24] break-words ${
+              isEn
+                ? size === 'xs'
+                  ? 'text-[9.5px] sm:text-[10px] tracking-normal line-clamp-4'
+                  : 'text-[9px] tracking-normal line-clamp-3'
+                : size === 'xs'
+                ? 'text-[10.5px] sm:text-[11px] tracking-tight line-clamp-4'
+                : 'text-[10px] tracking-tight line-clamp-3'
             }`}
             style={{ color: style.text }}
           >
@@ -195,25 +235,47 @@ export const BookCover: React.FC<BookCoverProps> = ({
           </span>
         </div>
       ) : (
-        <div className="relative h-full flex flex-col justify-between p-4 pl-6">
+        <div className="relative h-full flex flex-col justify-between p-2.5 pl-4 sm:p-4 sm:pl-6">
           <div className="flex items-center justify-between gap-1">
             <span
-              className="text-[9px] tracking-[0.16em] uppercase opacity-80 truncate"
+              className="text-[8px] sm:text-[9px] tracking-[0.12em] sm:tracking-[0.14em] uppercase opacity-80 truncate"
               style={{ color: style.accent }}
             >
               {category.slice(0, 6)}
             </span>
-            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: style.accent }} />
+            {isEn ? (
+              <span
+                className="text-[7px] sm:text-[8px] font-mono font-bold tracking-widest px-1 sm:px-1.5 py-0.5 rounded shrink-0"
+                style={{ backgroundColor: `${style.accent}26`, color: style.accent }}
+              >
+                EN
+              </span>
+            ) : bilingual ? (
+              <span
+                className="text-[7px] sm:text-[8px] font-bold tracking-wider px-1 sm:px-1.5 py-0.5 rounded shrink-0"
+                style={{ backgroundColor: `${style.accent}2c`, color: style.accent }}
+              >
+                双语
+              </span>
+            ) : (
+              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: style.accent }} />
+            )}
           </div>
 
-          <div className="my-auto py-1">
+          <div className="my-auto py-0.5 sm:py-1">
             <div
-              className="w-6 h-[1.5px] mb-2.5 opacity-80"
+              className="w-4 sm:w-6 h-[1.5px] mb-1.5 sm:mb-2.5 opacity-80"
               style={{ backgroundColor: style.accent }}
             />
             <h3
-              className={`font-serif font-bold leading-snug tracking-wide line-clamp-3 ${
-                size === 'lg' ? 'text-lg' : 'text-[15px]'
+              className={`font-serif font-bold ${
+                isEn
+                  ? size === 'lg'
+                    ? 'text-[15px] leading-snug tracking-normal line-clamp-4'
+                    : 'text-[10.5px] sm:text-[13px] leading-[1.28] sm:leading-[1.32] tracking-normal line-clamp-4'
+                  : size === 'lg'
+                  ? 'text-lg leading-snug tracking-wide line-clamp-3'
+                  : 'text-[12px] sm:text-[15px] leading-snug tracking-tight sm:tracking-wide line-clamp-3'
               }`}
               style={{ color: style.text }}
             >
@@ -221,13 +283,109 @@ export const BookCover: React.FC<BookCoverProps> = ({
             </h3>
           </div>
 
-          <div className="pt-2 border-t" style={{ borderColor: `${style.accent}33` }}>
-            <p className="text-[11px] opacity-85 truncate font-serif" style={{ color: style.accent }}>
+          <div className="pt-1.5 sm:pt-2 border-t" style={{ borderColor: `${style.accent}33` }}>
+            <p className="text-[9.5px] sm:text-[11px] opacity-85 truncate font-serif" style={{ color: style.accent }}>
               {author}
             </p>
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+export interface ShelfFolderPreviewBook {
+  id: string
+  title: string
+  palette: string
+  monogram?: string
+}
+
+interface ShelfFolderCoverProps {
+  books: ShelfFolderPreviewBook[]
+  emptyIcon?: React.ReactNode
+  badge?: React.ReactNode
+}
+
+/** 书架合集实体文件夹缩略封面：呈现 2×2 真实迷你书封矩阵（仿 Apple Books / 微信读书书架分组） */
+export const ShelfFolderCover: React.FC<ShelfFolderCoverProps> = ({
+  books,
+  emptyIcon,
+  badge,
+}) => {
+  const slots = books.slice(0, 4)
+
+  return (
+    <div
+      className="relative w-full aspect-[3/3.55] rounded-2xl p-2 border overflow-hidden transition-transform duration-200 active:scale-[0.97]"
+      style={{
+        backgroundColor: 'var(--bg-card)',
+        borderColor: 'var(--border-strong)',
+        boxShadow: 'var(--shadow-soft)',
+      }}
+    >
+      {/* 细微书架顶栏质感 */}
+      <div
+        className="absolute inset-x-0 bottom-0 h-2 pointer-events-none opacity-45"
+        style={{ background: 'linear-gradient(180deg, transparent, var(--border))' }}
+      />
+
+      {slots.length === 0 ? (
+        <div
+          className="w-full h-full rounded-xl border border-dashed flex flex-col items-center justify-center gap-1"
+          style={{ borderColor: 'var(--border-strong)', backgroundColor: 'var(--bg)', color: 'var(--text-muted)' }}
+        >
+          {emptyIcon}
+          <span className="text-[10px] opacity-75">暂无典籍</span>
+        </div>
+      ) : (
+        <div className="w-full h-full grid grid-cols-2 grid-rows-2 gap-1.5">
+          {[0, 1, 2, 3].map((idx) => {
+            const b = slots[idx]
+            if (!b) {
+              return (
+                <div
+                  key={`empty_${idx}`}
+                  className="rounded-[6px] border border-dashed opacity-45"
+                  style={{ borderColor: 'var(--border-strong)', backgroundColor: 'var(--bg)' }}
+                />
+              )
+            }
+            const pal = PALETTE_STYLES[b.palette] || PALETTE_STYLES['obsidian-gold']
+            return (
+              <div
+                key={b.id}
+                className="relative rounded-[6px] overflow-hidden shadow-sm select-none"
+                style={{ background: pal.bg, color: pal.text }}
+              >
+                {/* 迷你书脊 */}
+                <div
+                  className="absolute inset-y-0 left-0 w-[3px]"
+                  style={{
+                    background: `linear-gradient(90deg, ${pal.spine} 0%, rgba(255,255,255,0.16) 70%, rgba(0,0,0,0.28) 100%)`,
+                  }}
+                />
+                {/* 迷你鎏金框 */}
+                <div
+                  className="absolute inset-[2.5px] left-[4.5px] rounded-[2px] pointer-events-none"
+                  style={{ border: `0.5px solid ${pal.accent}40` }}
+                />
+                <div className="relative h-full flex flex-col justify-between p-1 pl-1.5 text-left">
+                  <span className="w-2 h-[1px] opacity-75 shrink-0" style={{ backgroundColor: pal.accent }} />
+                  <span
+                    className="font-serif font-bold text-[7.5px] leading-[1.15] line-clamp-2 break-words"
+                    style={{ color: pal.text }}
+                  >
+                    {b.title}
+                  </span>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {badge && <div className="absolute top-1.5 right-1.5 z-10">{badge}</div>}
     </div>
   )
 }

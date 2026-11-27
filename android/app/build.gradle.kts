@@ -11,8 +11,8 @@ android {
         applicationId = "com.lumen.reader"
         minSdk = 24
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 3
+        versionName = "1.2.0 (2026.11.27)"
     }
 
     buildTypes {

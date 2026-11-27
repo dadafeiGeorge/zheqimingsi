@@ -14,6 +14,7 @@ import type {
   ReadingProgress,
   StudyStats,
   TranslationSettings,
+  UserCollection,
 } from './types'
 import { fetchCatalog, getInitialCatalogSync } from './services/libraryApi'
 import { radioEngine } from './services/radioEngine'
@@ -38,6 +39,7 @@ import {
   loadReaderSettings,
   loadStats,
   loadTranslationSettings,
+  loadUserCollections,
   saveAiConversations,
   saveAiSettings,
   saveBookmarks,
@@ -46,6 +48,7 @@ import {
   saveRadioQueue,
   saveReaderSettings,
   saveTranslationSettings,
+  saveUserCollections,
 } from './services/storage'
 import { TitleBar } from './components/TitleBar'
 import { LibraryView } from './components/LibraryView'
@@ -65,12 +68,14 @@ export default function App() {
   )
   const [radioDockVisible, setRadioDockVisible] = useState(false)
   const [books, setBooks] = useState<BookCatalogItem[]>(() => getInitialCatalogSync())
+  const [catalogReady, setCatalogReady] = useState<boolean>(() => books.length > 0)
   const [catalogError, setCatalogError] = useState<string | null>(null)
   const [settings, setSettings] = useState<ReaderSettings>(() => loadReaderSettings())
   const [radioSettings, setRadioSettings] = useState<RadioSettings>(() => loadRadioSettings())
   const [radio, setRadio] = useState<RadioState>(() => radioEngine.getState())
   const [progressMap, setProgressMap] = useState<Record<string, ReadingProgress>>(() => loadAllProgress())
   const [favorites, setFavorites] = useState<string[]>(() => loadFavorites())
+  const [userCollections, setUserCollections] = useState<UserCollection[]>(() => loadUserCollections())
   const [highlights, setHighlights] = useState<HighlightItem[]>(() => loadHighlights())
   const [bookmarks, setBookmarks] = useState<BookmarkItem[]>(() => loadBookmarks())
   const [radioQueue, setRadioQueue] = useState<RadioQueueItem[]>(() => loadRadioQueue())
@@ -88,6 +93,9 @@ export default function App() {
     blockIndex: number
     scrollRatio?: number
   } | null>(null)
+  // 移动端书架当前所在合集由 App 统一持有，且 LibraryView 保持挂载，确保「合集 → 阅读 → 返回」100% 精准回到原合集
+  const [mobileShelfTarget, setMobileShelfTarget] = useState<string | null>(null)
+  const lastTabExitAtRef = useRef<number>(0)
 
   // 导航历史栈：支持返回键按真实浏览路径逐级回退
   const tabHistoryRef = useRef<AppTab[]>([])
@@ -129,6 +137,7 @@ export default function App() {
   }, [])
 
   const navigateBack = useCallback(() => {
+    lastTabExitAtRef.current = Date.now()
     const prev = tabHistoryRef.current.pop()
     if (prev && prev !== activeTabRef.current) {
       setActiveTab(prev)
@@ -151,8 +160,12 @@ export default function App() {
       .then((list) => {
         setBooks(list)
         setCatalogError(null)
+        setCatalogReady(true)
       })
-      .catch((err) => setCatalogError(err?.message || '书库加载失败'))
+      .catch((err) => {
+        setCatalogError(err?.message || '书库加载失败')
+        setCatalogReady(true)
+      })
   }, [])
 
   const bootNotifiedRef = useRef(false)
@@ -198,6 +211,10 @@ export default function App() {
   // 挂载 Android 系统返回键与手势侧滑返回处理入口
   useEffect(() => {
     window.__handleAndroidBack = () => {
+      // 防连击抖动：刚从阅读页/子页面返回书馆 260ms 内，忽略重复触发的返回事件，防止连退两级直接跳回首页
+      if (Date.now() - lastTabExitAtRef.current < 260) {
+        return 'consumed'
+      }
       // 1. 优先交由当前打开的弹窗、浮卡、抽屉、面板或阅读器分层处理
       if (dispatchRegisteredBackHandlers()) {
         return 'consumed'
@@ -349,6 +366,11 @@ export default function App() {
 
   const handleSelectTab = useCallback(
     (tab: AppTab) => {
+      if (tab === 'library' && activeTabRef.current === 'library' && mobileShelfTarget !== null) {
+        // 已在书馆合集页时再次点击底部「书馆」图标，平滑回到书架首页
+        setMobileShelfTarget(null)
+        return
+      }
       if (tab === 'reader') {
         if (readerTarget) {
           navigateToTab('reader')
@@ -369,12 +391,13 @@ export default function App() {
       }
       navigateToTab(tab)
     },
-    [readerTarget, mostRecentProgress, books, handleOpenBook, navigateToTab]
+    [readerTarget, mostRecentProgress, books, handleOpenBook, navigateToTab, mobileShelfTarget]
   )
 
   const handleDataImported = () => {
     setProgressMap(loadAllProgress())
     setFavorites(loadFavorites())
+    setUserCollections(loadUserCollections())
     setHighlights(loadHighlights())
     setBookmarks(loadBookmarks())
     setRadioQueue(loadRadioQueue())
@@ -385,6 +408,12 @@ export default function App() {
     const newRadio = loadRadioSettings()
     radioEngine.updateSettings(newRadio)
     setRadioSettings(radioEngine.getSettings())
+    refreshCatalog()
+  }
+
+  const handleSaveUserCollections = (next: UserCollection[]) => {
+    setUserCollections(next)
+    saveUserCollections(next)
   }
 
   const handlePlayBookRadio = (bookId: string, chapterIndex?: number, blockIndex = 0) => {
@@ -539,7 +568,9 @@ export default function App() {
 
       {/* 主视图舞台 */}
       <main className="flex-1 min-h-0 relative overflow-hidden">
-        {catalogError && books.length === 0 ? (
+        {!catalogReady && books.length === 0 && !catalogError ? (
+          <div className="h-full w-full" style={{ backgroundColor: 'var(--bg)' }} />
+        ) : catalogError && books.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center p-6 text-center gap-3">
             <p className="font-serif text-base font-bold">典藏书库初始化失败</p>
             <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
@@ -555,12 +586,17 @@ export default function App() {
           </div>
         ) : (
           <>
-            {activeTab === 'library' && (
+            <div className={activeTab === 'library' ? 'h-full w-full' : 'hidden'}>
               <LibraryView
+                isActive={activeTab === 'library'}
+                mobileShelfTarget={mobileShelfTarget}
+                onChangeMobileShelfTarget={setMobileShelfTarget}
                 books={books}
                 progressMap={progressMap}
                 favorites={favorites}
+                userCollections={userCollections}
                 onToggleFavorite={handleToggleFavorite}
+                onSaveUserCollections={handleSaveUserCollections}
                 onOpenBook={handleOpenBook}
                 onPlayBookRadio={(id, ch) => handlePlayBookRadio(id, ch, 0)}
                 onLaunchRoamRadio={() => {
@@ -569,7 +605,7 @@ export default function App() {
                 }}
                 onLibraryChanged={refreshCatalog}
               />
-            )}
+            </div>
 
             {activeTab === 'reader' && readerTarget && (
               <ReaderView
@@ -701,20 +737,19 @@ export default function App() {
                   triggerHaptic()
                   handleSelectTab(id)
                 }}
-                className="h-14 flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium relative transition-transform active:scale-95"
+                className="h-[54px] flex flex-col items-center justify-center gap-0.5 text-[10.5px] font-medium relative transition-transform active:scale-95"
                 style={{ color: active ? 'var(--accent)' : 'var(--text-secondary)' }}
               >
-                {active && (
-                  <span
-                    className="absolute top-0 w-8 h-[2.5px] rounded-full"
-                    style={{ backgroundColor: 'var(--accent)' }}
-                  />
-                )}
-                {icon}
-                <span>{label}</span>
+                <span
+                  className="px-3 py-1 rounded-full flex items-center justify-center transition-colors"
+                  style={active ? { backgroundColor: 'var(--accent-soft)' } : undefined}
+                >
+                  {icon}
+                </span>
+                <span className={active ? 'font-semibold' : ''}>{label}</span>
                 {id === 'radio' && isRadioPlaying && (
                   <span
-                    className="absolute top-2 right-[28%] w-2 h-2 rounded-full animate-pulse"
+                    className="absolute top-1.5 right-[27%] w-2 h-2 rounded-full animate-pulse"
                     style={{ backgroundColor: 'var(--accent)' }}
                   />
                 )}

@@ -173,6 +173,14 @@ export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
   const isConfigured = Boolean(aiSettings.apiKey.trim() || aiSettings.preset === 'ollama')
 
   useEffect(() => {
+    if (!showHistoryMobile) return
+    return registerBackHandler(75, () => {
+      setShowHistoryMobile(false)
+      return true
+    })
+  }, [showHistoryMobile])
+
+  useEffect(() => {
     if (variant !== 'drawer' || !onClose) return
     return registerBackHandler(95, () => {
       onClose()
@@ -430,7 +438,7 @@ export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
       <div className="flex-1 min-w-0 flex flex-col min-h-0 relative">
         {/* 顶栏 */}
         <div
-          className="px-4 py-3 border-b flex items-center justify-between gap-2 shrink-0"
+          className="px-3 md:px-4 py-2.5 md:py-3 border-b flex items-center justify-between gap-2 shrink-0"
           style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border)' }}
         >
           <div className="flex items-center gap-2 min-w-0">
@@ -443,17 +451,21 @@ export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
             <div className="min-w-0">
               <div className="text-sm font-serif font-bold truncate">AI 哲思助手</div>
               <div className="text-[10px] font-mono truncate" style={{ color: 'var(--text-muted)' }}>
-                {isConfigured ? `${aiSettings.model} · API 已就绪` : '尚未配置 API Key，请点击右侧设置'}
+                {isConfigured ? `${aiSettings.model} · 已就绪` : '请先配置 API Key'}
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
             {variant === 'page' && (
               <button
-                onClick={() => setShowHistoryMobile((v) => !v)}
-                className="md:hidden px-2.5 py-1.5 rounded-xl border text-[11px] flex items-center gap-1"
+                onClick={() => {
+                  triggerHaptic()
+                  setShowHistoryMobile((v) => !v)
+                }}
+                className="md:hidden h-8 px-2 rounded-xl border text-[11px] flex items-center gap-1 active:scale-95"
                 style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)' }}
+                title="对话记录"
               >
                 <MessageSquare className="w-3.5 h-3.5" />
                 <span>记录</span>
@@ -461,10 +473,14 @@ export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
             )}
 
             <button
-              onClick={() => createNewConversation()}
-              className="px-2.5 py-1.5 rounded-xl border text-[11px] font-medium flex items-center gap-1 hover:opacity-85"
+              onClick={() => {
+                triggerHaptic()
+                createNewConversation()
+              }}
+              className="h-8 px-2 sm:px-2.5 rounded-xl border text-[11px] font-medium flex items-center gap-1 hover:opacity-85 active:scale-95"
               style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)' }}
               title="开启新对话"
+              aria-label="开启新对话"
             >
               <Plus className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">新对话</span>
@@ -472,10 +488,14 @@ export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
 
             {onOpenTranslationSettings && (
               <button
-                onClick={onOpenTranslationSettings}
-                className="px-2.5 py-1.5 rounded-xl border text-[11px] font-medium flex items-center gap-1 hover:opacity-85"
+                onClick={() => {
+                  triggerHaptic()
+                  onOpenTranslationSettings()
+                }}
+                className="h-8 px-2 sm:px-2.5 rounded-xl border text-[11px] font-medium flex items-center gap-1 hover:opacity-85 active:scale-95"
                 style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)' }}
                 title="翻译引擎设置"
+                aria-label="翻译引擎设置"
               >
                 <Languages className="w-3.5 h-3.5" style={{ color: 'var(--accent)' }} />
                 <span className="hidden sm:inline">翻译引擎</span>
@@ -483,8 +503,11 @@ export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
             )}
 
             <button
-              onClick={onOpenAiSettings}
-              className="px-2.5 py-1.5 rounded-xl border text-[11px] font-medium flex items-center gap-1 hover:opacity-85"
+              onClick={() => {
+                triggerHaptic()
+                onOpenAiSettings()
+              }}
+              className="h-8 px-2 sm:px-2.5 rounded-xl border text-[11px] font-medium flex items-center gap-1 hover:opacity-85 active:scale-95"
               style={
                 !isConfigured
                   ? { backgroundColor: 'var(--accent)', color: '#fff', borderColor: 'var(--accent)' }
@@ -493,7 +516,8 @@ export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
               title="配置 AI API 接口与模型"
             >
               <Settings2 className="w-3.5 h-3.5" />
-              <span>API 设置</span>
+              <span className="hidden sm:inline">API 设置</span>
+              <span className="sm:hidden">设置</span>
             </button>
 
             {variant === 'drawer' && onClose && (

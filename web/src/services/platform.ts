@@ -24,6 +24,7 @@ declare global {
     }
     AndroidBridge?: {
       getAppVersion: () => string
+      getInitialCatalogJson?: () => string
       setStatusBarTheme: (isDark: boolean, bgColorHex: string) => void
       setImmersiveFullscreen: (on: boolean) => void
       setKeepScreenOn: (on: boolean) => void

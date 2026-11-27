@@ -194,6 +194,20 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   } | null>(null)
   const [bilingualMap, setBilingualMap] = useState<Record<number, { text?: string; loading?: boolean; error?: string }>>({})
   const [showTranslateMenu, setShowTranslateMenu] = useState(false)
+  const [bilingualView, setBilingualView] = useState<'both' | 'zh' | 'en'>(() => {
+    try {
+      const saved = localStorage.getItem('lumen_bilingual_view_v1')
+      if (saved === 'both' || saved === 'zh' || saved === 'en') return saved
+    } catch {}
+    return 'both'
+  })
+  const handleChangeBilingualView = useCallback((next: 'both' | 'zh' | 'en') => {
+    setBilingualView(next)
+    setPageIdx(0)
+    try {
+      localStorage.setItem('lumen_bilingual_view_v1', next)
+    } catch {}
+  }, [])
 
   // AI 伴读抽屉状态
   const [aiDrawerOpen, setAiDrawerOpen] = useState(false)
@@ -253,11 +267,6 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   const [fsHeaderVisible, setFsHeaderVisible] = useState(false)
   // 手机版 APK / 移动端阅读页：点一下弹出上下功能栏，再点一下收回
   const [mobileChromeOpen, setMobileChromeOpen] = useState(false)
-  const [showMobileThemeStrip, setShowMobileThemeStrip] = useState(false)
-  const currentThemeOption = useMemo(
-    () => THEME_OPTIONS.find((t) => t.id === settings.theme) || THEME_OPTIONS[0],
-    [settings.theme]
-  )
   const [scrollPct, setScrollPct] = useState(0)
   const [viewportSize, setViewportSize] = useState<{ width: number; height: number }>({
     width: typeof window !== 'undefined' ? window.innerWidth : 1024,
@@ -347,10 +356,6 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   }, [translationPopup, showTranslateMenu, footnotePopup, inspectHighlight, selectionMenu])
 
   useEffect(() => {
-    if (!mobileChromeOpen) setShowMobileThemeStrip(false)
-  }, [mobileChromeOpen])
-
-  useEffect(() => {
     return registerBackHandler(60, () => {
       if (showToc) {
         setShowToc(false)
@@ -360,17 +365,13 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         setShowSettings(false)
         return true
       }
-      if (showMobileThemeStrip) {
-        setShowMobileThemeStrip(false)
-        return true
-      }
       if (showInBookSearch) {
         setShowInBookSearch(false)
         return true
       }
       return false
     })
-  }, [showToc, showSettings, showMobileThemeStrip, showInBookSearch])
+  }, [showToc, showSettings, showInBookSearch])
 
   useEffect(() => {
     return registerBackHandler(20, () => {
@@ -499,9 +500,15 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
 
   const displayBlocks = useMemo(() => {
     if (!chapter) return []
-    if (resolvedFootnotes.hiddenBlockIndices.size === 0) return chapter.blocks
-    return chapter.blocks.filter((b) => !resolvedFootnotes.hiddenBlockIndices.has(b.index))
-  }, [chapter, resolvedFootnotes])
+    let list =
+      resolvedFootnotes.hiddenBlockIndices.size === 0
+        ? chapter.blocks
+        : chapter.blocks.filter((b) => !resolvedFootnotes.hiddenBlockIndices.has(b.index))
+    if (meta?.bilingual && bilingualView !== 'both') {
+      list = list.filter((b) => !b.langRole || b.langRole === bilingualView)
+    }
+    return list
+  }, [chapter, resolvedFootnotes, meta?.bilingual, bilingualView])
 
   // 分页模式按实际测量容器尺寸（宽×高）精准计算每页字符预算，彻底杜绝溢出或留白过大
   const pages = useMemo(() => {
@@ -1354,7 +1361,11 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     if (!meta) return []
     const q = tocFilter.trim().toLowerCase()
     if (!q) return meta.chapters
-    return meta.chapters.filter((c) => c.title.toLowerCase().includes(q))
+    return meta.chapters.filter(
+      (c) =>
+        c.title.toLowerCase().includes(q) ||
+        (c.subtitle && c.subtitle.toLowerCase().includes(q))
+    )
   }, [meta, tocFilter])
 
   const renderTocBody = () => (
@@ -1454,10 +1465,11 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                       }
                     }}
                     className="flex-1 text-left px-3 py-3 md:py-2.5 text-[13px] md:text-xs leading-snug truncate"
+                    title={ch.subtitle ? `${ch.title} / ${ch.subtitle}` : ch.title}
                     style={{
                       paddingLeft: `${10 + Math.min(ch.level - 1, 2) * 12}px`,
                       color: active ? 'var(--accent)' : 'var(--text)',
-                      fontWeight: active ? 700 : 400,
+                      fontWeight: active ? 700 : ch.level === 1 && meta?.bilingual ? 600 : 400,
                     }}
                   >
                     {ch.title}
@@ -1942,18 +1954,79 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
               }`}
             >
               {/* 章节眉题 */}
-              <div className="mb-8 pb-5 border-b flex items-end justify-between gap-4 select-none" style={{ borderColor: 'var(--border)' }}>
-                <div>
-                  <div className="text-[11px] font-mono tracking-widest uppercase" style={{ color: 'var(--accent)' }}>
-                    CHAPTER {chapterIndex + 1} / {meta?.chapterCount || 1}
-                    {isSpread ? ' · FULLSCREEN SPREAD' : ''}
+              <div className="mb-8 pb-5 border-b flex flex-col gap-3 select-none" style={{ borderColor: 'var(--border)' }}>
+                <div className="flex items-end justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-mono tracking-widest uppercase flex flex-wrap items-center gap-2" style={{ color: 'var(--accent)' }}>
+                      <span>
+                        CHAPTER {chapterIndex + 1} / {meta?.chapterCount || 1}
+                        {isSpread ? ' · FULLSCREEN SPREAD' : ''}
+                      </span>
+                      {meta?.bilingual && (
+                        <span
+                          className="text-[10px] font-sans font-semibold px-1.5 py-0.5 rounded tracking-normal"
+                          style={{ backgroundColor: 'var(--accent-soft)', color: 'var(--accent)' }}
+                        >
+                          {meta.bilingual === 'sentence' ? '中英逐句对照' : '中英逐段对照'}
+                        </span>
+                      )}
+                    </div>
+                    <h1 className="text-xl md:text-2xl font-bold mt-2 leading-snug">
+                      {meta?.bilingual && bilingualView === 'en' && chapter.subtitle ? chapter.subtitle : chapter.title}
+                    </h1>
+                    {meta?.bilingual && bilingualView === 'both' && chapter.subtitle && (
+                      <p className="bilingual-heading-sub text-sm md:text-[15px] mt-1">
+                        {chapter.subtitle}
+                      </p>
+                    )}
                   </div>
-                  <h1 className="text-xl md:text-2xl font-bold mt-2 leading-snug">{chapter.title}</h1>
+                  {isFullscreen && (
+                    <span className="hidden md:inline text-xs font-serif shrink-0" style={{ color: 'var(--text-muted)' }}>
+                      《{meta?.title}》
+                    </span>
+                  )}
                 </div>
-                {isFullscreen && (
-                  <span className="hidden md:inline text-xs font-serif shrink-0" style={{ color: 'var(--text-muted)' }}>
-                    《{meta?.title}》
-                  </span>
+
+                {/* 双语对照典籍阅读模式切换栏 */}
+                {meta?.bilingual && (
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex flex-wrap items-center justify-between gap-2 pt-1 font-sans"
+                  >
+                    <div
+                      className="inline-flex items-center p-0.5 rounded-xl border text-[11px]"
+                      style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border)' }}
+                    >
+                      {(
+                        [
+                          { id: 'both' as const, label: '中英对照' },
+                          { id: 'zh' as const, label: '仅看中文' },
+                          { id: 'en' as const, label: '仅看英文' },
+                        ] as const
+                      ).map((opt) => {
+                        const active = bilingualView === opt.id
+                        return (
+                          <button
+                            key={opt.id}
+                            onClick={() => handleChangeBilingualView(opt.id)}
+                            className="px-2.5 py-1 rounded-lg font-medium transition-all active:scale-95"
+                            style={
+                              active
+                                ? { backgroundColor: 'var(--accent)', color: '#fff', boxShadow: '0 1px 4px rgba(0,0,0,0.12)' }
+                                : { color: 'var(--text-secondary)' }
+                            }
+                          >
+                            {opt.label}
+                          </button>
+                        )
+                      })}
+                    </div>
+                    {meta.subtitle && (
+                      <span className="text-[11px] font-serif italic truncate opacity-75" style={{ color: 'var(--text-muted)' }}>
+                        {meta.subtitle}
+                      </span>
+                    )}
+                  </div>
                 )}
               </div>
 
@@ -2025,6 +2098,22 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                       blk.text.trim()
                     )
                   const isShortLine = blk.text.trim().length < 26
+                  const isBilingualBook = Boolean(meta?.bilingual)
+                  const isBiEn = isBilingualBook && blk.langRole === 'en'
+                  const isBiZh = isBilingualBook && blk.langRole === 'zh'
+                  const isBiPairMode = isBilingualBook && bilingualView === 'both'
+
+                  const blockMarginBottom = isBiPairMode
+                    ? isBiEn
+                      ? blk.type === 'quote'
+                        ? 0
+                        : 4
+                      : isBiZh
+                      ? settings.paraSpacing + 8
+                      : settings.paraSpacing
+                    : isFootnotePara
+                    ? Math.max(8, settings.paraSpacing - 4)
+                    : settings.paraSpacing
 
                   if (blk.type === 'hr') {
                     return <hr key={blk.id} className="my-7 border-t" style={{ borderColor: 'var(--border-strong)' }} />
@@ -2037,10 +2126,10 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                       ref={(el) => {
                         if (el) blockRefs.current.set(blk.index, el)
                       }}
-                      className={`reader-block-unit relative px-2 -mx-2 py-1 rounded-lg transition-colors ${
-                        isSpeaking ? 'tts-speaking-block' : ''
-                      } ${isFlashed ? 'search-flash-block' : ''}`}
-                      style={{ marginBottom: `${isFootnotePara ? Math.max(8, settings.paraSpacing - 4) : settings.paraSpacing}px` }}
+                      className={`reader-block-unit relative px-2 -mx-2 rounded-lg transition-colors ${
+                        isBiPairMode && isBiEn ? 'pt-1 pb-0.5' : isBiPairMode && isBiZh ? 'pt-0.5 pb-1' : 'py-1'
+                      } ${isSpeaking ? 'tts-speaking-block' : ''} ${isFlashed ? 'search-flash-block' : ''}`}
+                      style={{ marginBottom: `${blockMarginBottom}px` }}
                     >
                       {blk.type === 'heading' ? (
                         /^(?:\[(?:附释|说明|补充|按语|译者按|编者按)\]|(?:附释|说明)\s*(?:[一二三四五六七八九十\d]+)?)$/.test(
@@ -2062,18 +2151,45 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                           <div
                             className="font-bold text-[1.06em] mt-5 mb-1.5 pl-2.5 border-l-2 tracking-wide"
                             style={{ borderColor: 'var(--accent)', color: 'var(--text)' }}
-                            dangerouslySetInnerHTML={{ __html: renderedHtml }}
-                          />
+                          >
+                            <div
+                              dangerouslySetInnerHTML={{
+                                __html: isBilingualBook && bilingualView === 'en' && blk.subHtml ? blk.subHtml : renderedHtml,
+                              }}
+                            />
+                            {isBiPairMode && blk.subHtml && (
+                              <div className="bilingual-heading-sub" dangerouslySetInnerHTML={{ __html: blk.subHtml }} />
+                            )}
+                          </div>
                         ) : (
                           <div
                             className={`font-bold ${
                               (blk.level || 2) <= 2 ? 'text-[1.22em] mt-5 mb-1.5' : 'text-[1.08em] mt-3.5 mb-1'
                             }`}
-                            dangerouslySetInnerHTML={{ __html: renderedHtml }}
-                          />
+                          >
+                            <div
+                              dangerouslySetInnerHTML={{
+                                __html: isBilingualBook && bilingualView === 'en' && blk.subHtml ? blk.subHtml : renderedHtml,
+                              }}
+                            />
+                            {isBiPairMode && blk.subHtml && (
+                              <div className="bilingual-heading-sub" dangerouslySetInnerHTML={{ __html: blk.subHtml }} />
+                            )}
+                          </div>
                         )
                       ) : blk.type === 'quote' ? (
-                        <blockquote dangerouslySetInnerHTML={{ __html: renderedHtml }} />
+                        <blockquote
+                          className={
+                            isBiPairMode && isBiEn
+                              ? 'bilingual-quote-en'
+                              : isBiPairMode && isBiZh
+                              ? 'bilingual-quote-zh'
+                              : isBiEn
+                              ? 'bilingual-en-solo'
+                              : ''
+                          }
+                          dangerouslySetInnerHTML={{ __html: renderedHtml }}
+                        />
                       ) : blk.type === 'table' ? (
                         <div dangerouslySetInnerHTML={{ __html: renderedHtml }} />
                       ) : blk.type === 'list' ? (
@@ -2089,8 +2205,16 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                         />
                       ) : (
                         <p
-                          className={`${settings.justify && !isShortLine ? 'text-justify' : 'text-left'} ${
-                            settings.textIndent && !isShortLine ? 'indent-[2em]' : ''
+                          className={`${settings.justify && !isShortLine && !isBiEn ? 'text-justify' : 'text-left'} ${
+                            isBiPairMode && isBiEn
+                              ? 'bilingual-en-prose'
+                              : isBiPairMode && isBiZh
+                              ? 'bilingual-zh-prose'
+                              : isBiEn
+                              ? 'bilingual-en-solo'
+                              : settings.textIndent && !isShortLine && meta?.lang !== 'en'
+                              ? 'indent-[2em]'
+                              : ''
                           }`}
                           dangerouslySetInnerHTML={{ __html: renderedHtml }}
                         />
@@ -2360,53 +2484,13 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                 </button>
               </div>
 
-              {/* 展开的 4 主题快捷色盘（与排版抽屉完全一致，一键切换） */}
-              {showMobileThemeStrip && (
-                <div
-                  className="grid grid-cols-4 gap-2 mb-3 p-2 rounded-2xl border animate-float-in"
-                  style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border)' }}
-                >
-                  {THEME_OPTIONS.map((t) => {
-                    const active = settings.theme === t.id
-                    return (
-                      <button
-                        key={t.id}
-                        onClick={() => {
-                          triggerHaptic()
-                          onUpdateSettings({ theme: t.id })
-                        }}
-                        className="relative flex flex-col items-center gap-0.5 py-2 px-1 rounded-xl border text-[11px] font-medium transition-transform active:scale-95"
-                        style={{
-                          backgroundColor: t.swatch,
-                          color: t.ink,
-                          borderColor: active ? t.accent : 'var(--border-strong)',
-                          boxShadow: active ? `0 0 0 2px ${t.accent}` : 'none',
-                        }}
-                      >
-                        {active && (
-                          <span
-                            className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-white shadow-sm"
-                            style={{ backgroundColor: t.accent }}
-                          >
-                            <Check className="w-2.5 h-2.5" strokeWidth={3} />
-                          </span>
-                        )}
-                        <span className="font-serif text-sm font-bold leading-none">永</span>
-                        <span className="text-[10px] leading-tight">{t.shortName}</span>
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-
-              {/* 第二行：五大核心快捷功能键（目录 / 听书 / AI / 主题 / 排版） */}
-              <div className="grid grid-cols-5 gap-1">
+              {/* 第二行：四大核心快捷功能键（目录 / 听书 / AI / 排版，主题已集成在排版中） */}
+              <div className="grid grid-cols-4 gap-1">
                 <button
                   onClick={() => {
                     triggerHaptic()
                     setShowToc(true)
                     setShowSettings(false)
-                    setShowMobileThemeStrip(false)
                   }}
                   className="py-2 flex flex-col items-center justify-center gap-1 rounded-xl text-[11px] font-medium active:scale-95"
                   style={{ color: showToc ? 'var(--accent)' : 'var(--text-secondary)' }}
@@ -2438,7 +2522,6 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                   onClick={() => {
                     triggerHaptic()
                     setMobileChromeOpen(false)
-                    setShowMobileThemeStrip(false)
                     setAiQuoteContext(null)
                     setAiDrawerOpen(true)
                   }}
@@ -2452,36 +2535,8 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                 <button
                   onClick={() => {
                     triggerHaptic()
-                    setShowMobileThemeStrip((prev) => !prev)
-                  }}
-                  className="py-2 flex flex-col items-center justify-center gap-1 rounded-xl text-[11px] font-medium active:scale-95"
-                  style={{ color: showMobileThemeStrip ? 'var(--accent)' : 'var(--text-secondary)' }}
-                >
-                  <span
-                    className="w-[18px] h-[18px] rounded-full border-2 flex items-center justify-center shadow-inner"
-                    style={{
-                      backgroundColor: currentThemeOption.swatch,
-                      borderColor: showMobileThemeStrip
-                        ? 'var(--accent)'
-                        : currentThemeOption.dark
-                        ? 'rgba(255,255,255,0.45)'
-                        : 'rgba(35,31,27,0.32)',
-                    }}
-                  >
-                    <span
-                      className="w-1.5 h-1.5 rounded-full"
-                      style={{ backgroundColor: currentThemeOption.accent }}
-                    />
-                  </span>
-                  <span>{currentThemeOption.shortName}</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    triggerHaptic()
                     setShowSettings(true)
                     setShowToc(false)
-                    setShowMobileThemeStrip(false)
                   }}
                   className="py-2 flex flex-col items-center justify-center gap-1 rounded-xl text-[11px] font-medium active:scale-95"
                   style={{ color: showSettings ? 'var(--accent)' : 'var(--text-secondary)' }}
