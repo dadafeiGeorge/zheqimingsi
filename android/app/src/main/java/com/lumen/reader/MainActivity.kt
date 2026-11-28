@@ -64,6 +64,9 @@ class MainActivity : AppCompatActivity() {
     private var auditionSystemTtsReady = false
     private var volumeKeyTurnEnabled = false
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
+    private var pendingExportId: String? = null
+    private var pendingExportContent: String? = null
+    private var pendingExportFileName: String? = null
     private val proxyHttpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
             .connectTimeout(20, TimeUnit.SECONDS)
@@ -99,6 +102,48 @@ class MainActivity : AppCompatActivity() {
             }
         } else {
             cb.onReceiveValue(null)
+        }
+    }
+
+    private val createDocumentLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val exportId = pendingExportId
+        val content = pendingExportContent
+        val fileName = pendingExportFileName ?: "export.txt"
+        pendingExportId = null
+        pendingExportContent = null
+        pendingExportFileName = null
+        if (exportId == null || content == null) return@registerForActivityResult
+
+        val resObj = JSONObject()
+        val uri = result.data?.data
+        if (result.resultCode == RESULT_OK && uri != null) {
+            try {
+                val bytes = content.toByteArray(Charsets.UTF_8)
+                contentResolver.openOutputStream(uri, "wt")?.use { out ->
+                    out.write(bytes)
+                    out.flush()
+                } ?: throw IllegalStateException("无法打开目标文件输出流")
+                resObj.put("ok", true)
+                resObj.put("path", fileName)
+            } catch (e: Exception) {
+                resObj.put("ok", false)
+                resObj.put("error", e.message ?: "写入文件失败")
+            }
+        } else {
+            resObj.put("ok", false)
+            resObj.put("cancelled", true)
+        }
+        val idEsc = JSONObject.quote(exportId)
+        val resEsc = JSONObject.quote(resObj.toString())
+        runOnUiThread {
+            runCatching {
+                webView.evaluateJavascript(
+                    "window.__onAndroidFileExportResult && window.__onAndroidFileExportResult($idEsc, JSON.parse($resEsc));",
+                    null
+                )
+            }
         }
     }
 
@@ -300,7 +345,7 @@ class MainActivity : AppCompatActivity() {
     inner class AndroidJsBridge {
 
         @JavascriptInterface
-        fun getAppVersion(): String = "1.2.0 (2026.11.27)"
+        fun getAppVersion(): String = "1.2.1 (2026.11.28)"
 
         @JavascriptInterface
         fun getInitialCatalogJson(): String = cachedCatalogJson
@@ -633,6 +678,105 @@ class MainActivity : AppCompatActivity() {
             } catch (_: Exception) {
                 false
             }
+        }
+
+        @JavascriptInterface
+        fun saveTextFile(content: String, fileName: String, mimeType: String): String {
+            val safeName = fileName.trim().ifEmpty { "哲启明思导出_${System.currentTimeMillis()}.txt" }
+            val safeMime = when {
+                safeName.endsWith(".json", ignoreCase = true) -> "application/json"
+                safeName.endsWith(".md", ignoreCase = true) || safeName.endsWith(".markdown", ignoreCase = true) -> "text/markdown"
+                mimeType.isNotBlank() -> mimeType.substringBefore(';').trim()
+                else -> "text/plain"
+            }
+
+            // 优先在 Android 10+ (API 29+) 经 MediaStore.Downloads 直接保存至「Download/哲启明思/」（无需存储权限且文件管理器立即可见）
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                var insertedUri: Uri? = null
+                try {
+                    val relPath = "${Environment.DIRECTORY_DOWNLOADS}/哲启明思"
+                    val values = ContentValues().apply {
+                        put(MediaStore.Downloads.DISPLAY_NAME, safeName)
+                        put(MediaStore.Downloads.MIME_TYPE, safeMime)
+                        put(MediaStore.Downloads.RELATIVE_PATH, relPath)
+                        put(MediaStore.Downloads.IS_PENDING, 1)
+                    }
+                    insertedUri = contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                    if (insertedUri != null) {
+                        val bytes = content.toByteArray(Charsets.UTF_8)
+                        contentResolver.openOutputStream(insertedUri)?.use { out ->
+                            out.write(bytes)
+                            out.flush()
+                        } ?: throw IllegalStateException("无法写入下载目录")
+
+                        val doneValues = ContentValues().apply {
+                            put(MediaStore.Downloads.IS_PENDING, 0)
+                        }
+                        contentResolver.update(insertedUri, doneValues, null, null)
+
+                        var finalName = safeName
+                        runCatching {
+                            contentResolver.query(
+                                insertedUri,
+                                arrayOf(MediaStore.Downloads.DISPLAY_NAME),
+                                null,
+                                null,
+                                null
+                            )?.use { c ->
+                                if (c.moveToFirst()) {
+                                    val n = c.getString(0)
+                                    if (!n.isNullOrBlank()) finalName = n
+                                }
+                            }
+                        }
+
+                        return JSONObject().apply {
+                            put("ok", true)
+                            put("path", "Download/哲启明思/$finalName")
+                            put("fileName", finalName)
+                        }.toString()
+                    }
+                } catch (_: Exception) {
+                    insertedUri?.let { runCatching { contentResolver.delete(it, null, null) } }
+                }
+            }
+
+            // 兜底：Android 7–9 或 MediaStore 写入受限时，调起系统原生「另存为」文档选择器 (SAF ACTION_CREATE_DOCUMENT)
+            val exportId = "exp_${System.currentTimeMillis()}"
+            pendingExportId = exportId
+            pendingExportContent = content
+            pendingExportFileName = safeName
+            runOnUiThread {
+                try {
+                    val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                        addCategory(Intent.CATEGORY_OPENABLE)
+                        type = safeMime
+                        putExtra(Intent.EXTRA_TITLE, safeName)
+                    }
+                    createDocumentLauncher.launch(intent)
+                } catch (e: Exception) {
+                    pendingExportId = null
+                    pendingExportContent = null
+                    pendingExportFileName = null
+                    val errObj = JSONObject().apply {
+                        put("ok", false)
+                        put("error", e.message ?: "无法打开系统保存对话框")
+                    }
+                    val idEsc = JSONObject.quote(exportId)
+                    val resEsc = JSONObject.quote(errObj.toString())
+                    runCatching {
+                        webView.evaluateJavascript(
+                            "window.__onAndroidFileExportResult && window.__onAndroidFileExportResult($idEsc, JSON.parse($resEsc));",
+                            null
+                        )
+                    }
+                }
+            }
+            return JSONObject().apply {
+                put("ok", false)
+                put("pendingPicker", true)
+                put("exportId", exportId)
+            }.toString()
         }
 
         @JavascriptInterface

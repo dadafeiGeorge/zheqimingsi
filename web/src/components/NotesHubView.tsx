@@ -12,7 +12,7 @@ import {
 } from 'lucide-react'
 import type { BookmarkItem, HighlightItem, StudyStats } from '../types'
 import { QuoteCardModal } from './QuoteCardModal'
-import { notifyToast, triggerHaptic } from '../services/platform'
+import { exportTextFile, notifyToast, triggerHaptic } from '../services/platform'
 import { exportFullBackupJson, importFullBackupJson } from '../services/storage'
 
 interface NotesHubViewProps {
@@ -87,7 +87,7 @@ export const NotesHubView: React.FC<NotesHubViewProps> = ({
 
   const maxDayMin = Math.max(10, ...last7Days.map((d) => d.readMin + d.listenMin))
 
-  const handleExportMarkdown = () => {
+  const handleExportMarkdown = async () => {
     const lines: string[] = [
       '# 哲启明思阅读笔记与金句摘录',
       '',
@@ -101,26 +101,28 @@ export const NotesHubView: React.FC<NotesHubViewProps> = ({
       lines.push('')
     }
     const md = lines.join('\n')
-    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `哲启明思哲学笔记_${new Date().toISOString().slice(0, 10)}.md`
-    a.click()
-    URL.revokeObjectURL(url)
-    notifyToast('已导出 Markdown 笔记文件')
+    const fileName = `哲启明思哲学笔记_${new Date().toISOString().slice(0, 10)}.md`
+    const res = await exportTextFile(md, fileName, 'text/markdown;charset=utf-8')
+    if (res.ok) {
+      notifyToast(res.path ? `已保存笔记至 ${res.path}` : '已导出 Markdown 笔记文件')
+    } else if (!res.cancelled) {
+      notifyToast(`导出笔记失败：${res.error || '请检查存储空间'}`)
+    }
   }
 
-  const handleExportJsonBackup = () => {
+  const handleExportJsonBackup = async () => {
     const json = exportFullBackupJson()
-    const blob = new Blob([json], { type: 'application/json;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `哲启明思学习档案备份_${new Date().toISOString().slice(0, 10)}.json`
-    a.click()
-    URL.revokeObjectURL(url)
-    notifyToast('已导出全量学习档案（进度·划线·批注·书签·设置）')
+    const fileName = `哲启明思学习档案备份_${new Date().toISOString().slice(0, 10)}.json`
+    const res = await exportTextFile(json, fileName, 'application/json;charset=utf-8')
+    if (res.ok) {
+      notifyToast(
+        res.path
+          ? `已保存全量备份至 ${res.path}`
+          : '已导出全量学习档案（进度·划线·批注·书签·设置）'
+      )
+    } else if (!res.cancelled) {
+      notifyToast(`导出备份失败：${res.error || '请检查存储空间'}`)
+    }
   }
 
   const handleImportJsonBackup = async (e: React.ChangeEvent<HTMLInputElement>) => {

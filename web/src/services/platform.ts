@@ -49,6 +49,7 @@ declare global {
       ttsFetchVoices: () => void
       ttsGetSystemEngineName?: () => string
       saveImageBase64: (base64Png: string, fileName: string) => boolean
+      saveTextFile?: (content: string, fileName: string, mimeType: string) => string
       showToast: (msg: string) => void
       httpRequest?: (reqId: string, payloadJson: string) => void
       httpStreamStart?: (reqId: string, payloadJson: string) => void
@@ -60,6 +61,85 @@ declare global {
     __handleAndroidBack?: () => 'consumed' | 'exit_background' | 'exit'
     __onAndroidHttpResponse?: (reqId: string, result: NativeHttpResponse) => void
     __onAndroidHttpStream?: (reqId: string, eventType: 'chunk' | 'done' | 'error', data: string) => void
+    __onAndroidFileExportResult?: (exportId: string, result: FileExportResult) => void
+  }
+}
+
+export interface FileExportResult {
+  ok: boolean
+  path?: string
+  cancelled?: boolean
+  error?: string
+}
+
+const androidFileExportPending = new Map<string, (res: FileExportResult) => void>()
+
+function ensureAndroidFileExportCallback() {
+  if (typeof window === 'undefined') return
+  if (!window.__onAndroidFileExportResult) {
+    window.__onAndroidFileExportResult = (exportId, result) => {
+      const resolver = androidFileExportPending.get(exportId)
+      if (resolver) {
+        androidFileExportPending.delete(exportId)
+        resolver(result)
+      }
+    }
+  }
+}
+
+/**
+ * 跨端文本/备份文件导出：
+ * - Android APK：通过原生 MediaStore.Downloads 直接保存至 Download/哲启明思/（低版本自动调起系统另存为），返回真实写入结果
+ * - Electron / 浏览器：通过 Blob + <a download> 触发下载
+ */
+export async function exportTextFile(
+  content: string,
+  fileName: string,
+  mimeType = 'text/plain;charset=utf-8'
+): Promise<FileExportResult> {
+  if (getPlatform() === 'android') {
+    const bridge = window.AndroidBridge
+    if (!bridge?.saveTextFile) {
+      return { ok: false, error: '当前版本不支持原生文件导出，请更新最新 APK' }
+    }
+    ensureAndroidFileExportCallback()
+    try {
+      const raw = bridge.saveTextFile(content, fileName, mimeType)
+      const parsed = JSON.parse(raw || '{}') as FileExportResult & {
+        pendingPicker?: boolean
+        exportId?: string
+      }
+      if (parsed.ok) {
+        return { ok: true, path: parsed.path }
+      }
+      if (parsed.pendingPicker && parsed.exportId) {
+        return await new Promise<FileExportResult>((resolve) => {
+          androidFileExportPending.set(parsed.exportId!, resolve)
+        })
+      }
+      return {
+        ok: false,
+        cancelled: parsed.cancelled,
+        error: parsed.error || '文件写入失败',
+      }
+    } catch (err: any) {
+      return { ok: false, error: err?.message || '原生导出调用失败' }
+    }
+  }
+
+  try {
+    const blob = new Blob([content], { type: mimeType })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = fileName
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+    return { ok: true }
+  } catch (err: any) {
+    return { ok: false, error: err?.message || '导出失败' }
   }
 }
 

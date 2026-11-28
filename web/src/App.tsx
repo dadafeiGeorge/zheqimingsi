@@ -116,7 +116,7 @@ export default function App() {
       toastTimerRef.current = window.setTimeout(() => {
         setToastMsg(null)
         toastTimerRef.current = null
-      }, 2100)
+      }, msg.length > 24 ? 3200 : 2100)
     })
   }, [])
 
